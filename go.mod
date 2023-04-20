@@ -1,4 +1,4 @@
-module github.com/FractalKnight/chrysalis/Payload_Type/chrysalis/agent_code
+module github.com/FractalKnight/chrysalis
 
 go 1.15
 

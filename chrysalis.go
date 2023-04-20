@@ -45,7 +45,7 @@ var newTaskChannel = make(chan structs.Task, 10)
 
 // channel processes responses that should go out and directs them towards the egress direction
 var newResponseChannel = make(chan structs.Response, 10)
-var newDelegatesToMythicChannel = make(chan structs.DelegateMessage, 10)
+var newDelegatesToChrysalisChannel = make(chan structs.DelegateMessage, 10)
 var P2PConnectionMessageChannel = make(chan structs.P2PConnectionMessage, 10)
 
 // Mapping of command names to integers
@@ -70,37 +70,36 @@ var tasktypes = map[string]int{
 // define a new instance of an egress profile and P2P profile
 var profile = profiles.New()
 
-// Map used to handle go routines that are waiting for a response from apfell to continue
 var storedFiles = make(map[string]([]byte))
 
-var sendFilesToMythicChannel = make(chan structs.SendFileToMythicStruct, 10)
-var getFilesFromMythicChannel = make(chan structs.GetFileFromMythicStruct, 10)
+var sendFilesToChrysalisChannel = make(chan structs.SendFileToChrysalisStruct, 10)
+var getFilesFromChrysalisChannel = make(chan structs.GetFileFromChrysalisStruct, 10)
 
 //export RunMain
 func RunMain() {
 	main()
 }
 
-// go routine that listens for messages that should go to Mythic for sending files to Mythic
-// get things ready to transfer a file from chrysalis -> Mythic
-func sendFileToMythic() {
+// go routine that listens for messages that should go to Chrysalis for sending files to Chrysalis
+// get things ready to transfer a file from chrysalis -> Chrysalis
+func sendFileToChrysalis() {
 	for {
 		select {
-		case fileToMythic := <-sendFilesToMythicChannel:
-			fileToMythic.TrackingUUID = profiles.GenerateSessionID()
-			fileToMythic.FileTransferResponse = make(chan json.RawMessage)
-			fileToMythic.Task.Job.FileTransfers[fileToMythic.TrackingUUID] = fileToMythic.FileTransferResponse
-			go profiles.SendFile(fileToMythic)
+		case fileToChrysalis := <-sendFilesToChrysalisChannel:
+			fileToChrysalis.TrackingUUID = profiles.GenerateSessionID()
+			fileToChrysalis.FileTransferResponse = make(chan json.RawMessage)
+			fileToChrysalis.Task.Job.FileTransfers[fileToChrysalis.TrackingUUID] = fileToChrysalis.FileTransferResponse
+			go profiles.SendFile(fileToChrysalis)
 		}
 	}
 }
 
-// go routine that listens for messages that should go to Mythic for getting files from Mythic
-// get things ready to transfer a file from Mythic -> chrysalis
-func getFileFromMythic() {
+// go routine that listens for messages that should go to Chrysalis for getting files from Chrysalis
+// get things ready to transfer a file from Chrysalis -> chrysalis
+func getFileFromChrysalis() {
 	for {
 		select {
-		case getFile := <-getFilesFromMythicChannel:
+		case getFile := <-getFilesFromChrysalisChannel:
 			getFile.TrackingUUID = profiles.GenerateSessionID()
 			getFile.FileTransferResponse = make(chan json.RawMessage)
 			getFile.Task.Job.FileTransfers[getFile.TrackingUUID] = getFile.FileTransferResponse
@@ -128,25 +127,24 @@ func getSavedFile(fileUUID string) []byte {
 	}
 }
 
-func handleInboundMythicMessageFromEgressP2PChannel() {
+func handleInboundChrysalisMessageFromEgressP2PChannel() {
 	for {
-		//fmt.Printf("looping to see if there's messages in the profiles.HandleInboundMythicMessageFromEgressP2PChannel\n")
+		//fmt.Printf("looping to see if there's messages in the profiles.HandleInboundChrysalisMessageFromEgressP2PChannel\n")
 		select {
-		case message := <-profiles.HandleInboundMythicMessageFromEgressP2PChannel:
-			//fmt.Printf("Got message from HandleInboundMythicMessageFromEgressP2PChannel\n")
-			go handleMythicMessageResponse(message)
+		case message := <-profiles.HandleInboundChrysalisMessageFromEgressP2PChannel:
+			//fmt.Printf("Got message from HandleInboundChrysalisMessageFromEgressP2PChannel\n")
+			go handleChrysalisMessageResponse(message)
 		}
 	}
 }
 
-// Handle responses from mythic from post_response
-func handleMythicMessageResponse(mythicMessage structs.MythicMessageResponse) {
-	// Handle the response from apfell
-	//fmt.Printf("handleMythicMessageResponse:\n%v\n", mythicMessage)
+// Handle responses from chrysalis from post_response
+func handleChrysalisMessageResponse(chrysalisMessage structs.ChrysalisMessageResponse) {
+
 	// loop through each response and check to see if the file_id or task_id matches any existing background tasks
-	for i := 0; i < len(mythicMessage.Responses); i++ {
+	for i := 0; i < len(chrysalisMessage.Responses); i++ {
 		var r map[string]interface{}
-		err := json.Unmarshal([]byte(mythicMessage.Responses[i]), &r)
+		err := json.Unmarshal([]byte(chrysalisMessage.Responses[i]), &r)
 		if err != nil {
 			//log.Printf("Error unmarshal response to task response: %s", err.Error())
 			break
@@ -175,36 +173,36 @@ func handleMythicMessageResponse(mythicMessage structs.MythicMessageResponse) {
 		}
 	}
 	// loop through each socks message and send it off
-	for j := 0; j < len(mythicMessage.Socks); j++ {
-		profiles.FromMythicSocksChannel <- mythicMessage.Socks[j]
+	for j := 0; j < len(chrysalisMessage.Socks); j++ {
+		profiles.FromChrysalisSocksChannel <- chrysalisMessage.Socks[j]
 	}
 	// sort the Tasks
-	sort.Slice(mythicMessage.Tasks, func(i, j int) bool {
-		return mythicMessage.Tasks[i].Timestamp < mythicMessage.Tasks[j].Timestamp
+	sort.Slice(chrysalisMessage.Tasks, func(i, j int) bool {
+		return chrysalisMessage.Tasks[i].Timestamp < chrysalisMessage.Tasks[j].Timestamp
 	})
 	// for each task, give it the appropriate Job information and send it on its way for processing
-	for j := 0; j < len(mythicMessage.Tasks); j++ {
+	for j := 0; j < len(chrysalisMessage.Tasks); j++ {
 		job := &structs.Job{
 			Stop:                               new(int),
 			ReceiveResponses:                   make(chan json.RawMessage, 10),
 			SendResponses:                      newResponseChannel,
-			SendFileToMythic:                   sendFilesToMythicChannel,
+			SendFileToChrysalis:                sendFilesToChrysalisChannel,
 			FileTransfers:                      make(map[string](chan json.RawMessage)),
-			GetFileFromMythic:                  getFilesFromMythicChannel,
+			GetFileFromChrysalis:               getFilesFromChrysalisChannel,
 			SaveFileFunc:                       saveFile,
 			RemoveSavedFile:                    removeSavedFile,
 			GetSavedFile:                       getSavedFile,
 			AddNewInternalTCPConnectionChannel: profiles.AddNewInternalTCPConnectionChannel,
 			RemoveInternalTCPConnectionChannel: profiles.RemoveInternalTCPConnectionChannel,
-			C2:                                 profile,
+			Comm:                               profile,
 		}
-		mythicMessage.Tasks[j].Job = job
-		runningTasks[mythicMessage.Tasks[j].TaskID] = mythicMessage.Tasks[j]
-		newTaskChannel <- mythicMessage.Tasks[j]
+		chrysalisMessage.Tasks[j].Job = job
+		runningTasks[chrysalisMessage.Tasks[j].TaskID] = chrysalisMessage.Tasks[j]
+		newTaskChannel <- chrysalisMessage.Tasks[j]
 	}
 	// loop through each delegate and try to forward it along
-	if len(mythicMessage.Delegates) > 0 {
-		profiles.HandleDelegateMessageForInternalTCPConnections(mythicMessage.Delegates)
+	if len(chrysalisMessage.Delegates) > 0 {
+		profiles.HandleDelegateMessageForInternalTCPConnections(chrysalisMessage.Delegates)
 	}
 	return
 }
@@ -232,10 +230,10 @@ func aggregateResponses() {
 }
 
 // gather the delegate messages that need to go out the egress channel into a central location
-func aggregateDelegateMessagesToMythic() {
+func aggregateDelegateMessagesToChrysalis() {
 	for {
 		select {
-		case response := <-newDelegatesToMythicChannel:
+		case response := <-newDelegatesToChrysalisChannel:
 			mu.Lock()
 			profiles.DelegateResponses = append(profiles.DelegateResponses, response)
 			mu.Unlock()
@@ -244,7 +242,7 @@ func aggregateDelegateMessagesToMythic() {
 }
 
 // gather the edge notifications that need to go out the egress channel
-func aggregateEdgeAnnouncementsToMythic() {
+func aggregateEdgeAnnouncementsToChrysalis() {
 	for {
 		select {
 		case response := <-P2PConnectionMessageChannel:
@@ -377,7 +375,7 @@ func handleAddNewInternalTCPConnections() {
 }
 
 func readFromInternalTCPConnections(newConnection net.Conn, tempConnectionUUID string) {
-	// read from the internal connections to pass back out to Mythic
+	// read from the internal connections to pass back out to Chrysalis
 	//fmt.Printf("readFromInternalTCPConnection started for %v\n", newConnection)
 	var sizeBuffer uint32
 	for {
@@ -413,9 +411,9 @@ func readFromInternalTCPConnections(newConnection net.Conn, tempConnectionUUID s
 			newDelegateMessage := structs.DelegateMessage{}
 			newDelegateMessage.Message = string(readBuffer)
 			newDelegateMessage.UUID = profiles.GetInternalConnectionUUID(tempConnectionUUID)
-			newDelegateMessage.C2ProfileName = "chrysalis_tcp"
+			newDelegateMessage.ProfileName = "chrysalis_tcp"
 			//fmt.Printf("Adding delegate message to channel: %v\n", newDelegateMessage)
-			newDelegatesToMythicChannel <- newDelegateMessage
+			newDelegatesToChrysalisChannel <- newDelegateMessage
 		} else {
 			//fmt.Print("Read 0 bytes from internal TCP connection\n")
 			profiles.RemoveInternalTCPConnectionChannel <- tempConnectionUUID
@@ -431,7 +429,7 @@ func handleRemoveInternalTCPConnections() {
 		case removeConnection := <-profiles.RemoveInternalTCPConnectionChannel:
 			//fmt.Printf("handleRemoveInternalTCPConnections message from channel for %v\n", removeConnection)
 			successfullyRemovedConnection := false
-			removalMessage := structs.P2PConnectionMessage{Action: "remove", C2ProfileName: "chrysalis_tcp", Destination: removeConnection, Source: profiles.GetMythicID()}
+			removalMessage := structs.P2PConnectionMessage{Action: "remove", ProfileName: "chrysalis_tcp", Destination: removeConnection, Source: profiles.GetChrysalisID()}
 			successfullyRemovedConnection = profiles.RemoveInternalTCPConnection(removeConnection)
 			if successfullyRemovedConnection {
 				P2PConnectionMessageChannel <- removalMessage
@@ -443,13 +441,13 @@ func handleRemoveInternalTCPConnections() {
 func main() {
 	// Initialize the  agent and check in
 	go aggregateResponses()
-	go aggregateDelegateMessagesToMythic()
-	go aggregateEdgeAnnouncementsToMythic()
+	go aggregateDelegateMessagesToChrysalis()
+	go aggregateEdgeAnnouncementsToChrysalis()
 	go handleNewTask()
-	go sendFileToMythic()
-	go getFileFromMythic()
+	go sendFileToChrysalis()
+	go getFileFromChrysalis()
 	go handleAddNewInternalTCPConnections()
 	go handleRemoveInternalTCPConnections()
-	go handleInboundMythicMessageFromEgressP2PChannel()
+	go handleInboundChrysalisMessageFromEgressP2PChannel()
 	profile.Start()
 }

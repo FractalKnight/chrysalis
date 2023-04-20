@@ -32,7 +32,7 @@ func Run(task structs.Task) {
 		task.Job.SendResponses <- msg
 		return
 	}
-	r := structs.GetFileFromMythicStruct{}
+	r := structs.GetFileFromChrysalisStruct{}
 	r.FileID = args.FileID
 	fixedFilePath := args.RemotePath
 	if strings.HasPrefix(fixedFilePath, "~/") {
@@ -54,7 +54,7 @@ func Run(task structs.Task) {
 			}
 			defer fp.Close()
 			r.ReceivedChunkChannel = make(chan []byte)
-			task.Job.GetFileFromMythic <- r
+			task.Job.GetFileFromChrysalis <- r
 
 			for {
 				newBytes := <-r.ReceivedChunkChannel
@@ -80,7 +80,7 @@ func Run(task structs.Task) {
 		}
 		defer fp.Close()
 		r.ReceivedChunkChannel = make(chan []byte)
-		task.Job.GetFileFromMythic <- r
+		task.Job.GetFileFromChrysalis <- r
 
 		for {
 			newBytes := <-r.ReceivedChunkChannel

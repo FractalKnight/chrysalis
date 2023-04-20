@@ -1,5 +1,3 @@
-// +build darwin
-
 package functions
 
 /*
@@ -94,7 +92,8 @@ func UINT32ByteCountDecimal(b uint32) string {
 }
 
 // Helper function to convert LARGE_INTEGER byte
-//  counts to human readable sizes.
+//
+//	counts to human readable sizes.
 func UINT64ByteCountDecimal(b uint64) string {
 	const unit = 1024
 	if b < unit {

@@ -27,7 +27,7 @@ import (
 
 var (
 	// UUID is a per-payload identifier assigned by Chrysalis during creation
-	UUID                  string = "b4134382-b7b7-42ce-972f-747282843b1b"
+	UUID                  string = "c3625acc-2657-4002-96b0-ebcac0dcf674"
 	ChrysalisID                  = ""
 	SeededRand                   = rand.New(rand.NewSource(time.Now().UnixNano()))
 	TaskResponses         []json.RawMessage

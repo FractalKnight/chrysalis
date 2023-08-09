@@ -31,10 +31,10 @@ func Run(task structs.Task) {
 	}
 	output := ""
 	if args.Interval >= 0 {
-		output += task.Job.C2.SetSleepInterval(args.Interval)
+		output += task.Job.Comm.SetSleepInterval(args.Interval)
 	}
 	if args.Jitter >= 0 && args.Jitter <= 100 {
-		output += task.Job.C2.SetSleepJitter(args.Jitter)
+		output += task.Job.Comm.SetSleepJitter(args.Jitter)
 	}
 	resp := structs.Response{}
 	resp.UserOutput = output

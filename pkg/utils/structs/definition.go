@@ -6,7 +6,6 @@ import (
 	"os"
 )
 
-// Profile is the primary client interface for Mythic C2 profiles
 type Profile interface {
 	// CheckIn method for sending the initial checkin to the server
 	CheckIn() interface{}
@@ -16,7 +15,7 @@ type Profile interface {
 	NegotiateKey() bool
 	// Get the name of the c2 profile
 	ProfileType() string
-	// Start the main C2 profile tasking loop or listening loop
+	// Start the main Comm profile tasking loop or listening loop
 	Start()
 	// Set Sleep Interval
 	SetSleepInterval(interval int) string
@@ -72,7 +71,7 @@ type EkeKeyExchangeMessageResponse struct {
 
 // Struct definitions for Tasking request messages
 
-type MythicMessage struct {
+type ChrysalisMessage struct {
 	Action           string                  `json:"action"`
 	TaskingSize      int                     `json:"tasking_size"`
 	GetDelegateTasks bool                    `json:"get_delegate_tasks"`
@@ -82,7 +81,7 @@ type MythicMessage struct {
 	Edges            *[]P2PConnectionMessage `json:"edges,omitempty"`
 }
 
-type MythicMessageResponse struct {
+type ChrysalisMessageResponse struct {
 	Action    string            `json:"action"`
 	Tasks     []Task            `json:"tasks"`
 	Delegates []DelegateMessage `json:"delegates"`
@@ -100,11 +99,11 @@ type Task struct {
 
 type Job struct {
 	Stop                               *int
-	C2                                 Profile
+	Comm                               Profile
 	ReceiveResponses                   chan (json.RawMessage)
 	SendResponses                      chan (Response)
-	SendFileToMythic                   chan (SendFileToMythicStruct)
-	GetFileFromMythic                  chan (GetFileFromMythicStruct)
+	SendFileToChrysalis                chan (SendFileToChrysalisStruct)
+	GetFileFromChrysalis               chan (GetFileFromChrysalisStruct)
 	FileTransfers                      map[string](chan json.RawMessage)
 	SaveFileFunc                       func(fileUUID string, data []byte)
 	RemoveSavedFile                    func(fileUUID string)
@@ -114,7 +113,7 @@ type Job struct {
 	RemoveInternalTCPConnectionChannel chan (string)
 }
 
-type SendFileToMythicStruct struct {
+type SendFileToChrysalisStruct struct {
 	// the following are set by calling Task
 	Task         *Task
 	IsScreenshot bool
@@ -129,17 +128,17 @@ type SendFileToMythicStruct struct {
 	// channel to indicate once the file transfer has finished so that the task can act accordingly
 	FinishedTransfer chan (int)
 	// the following are set and used by Poseidon, Task doesn't use
-	// two components used by Poseidon internally to track and handle chunk responses from Mythic for this specific file transfer
+	// two components used by Poseidon internally to track and handle chunk responses from Chrysalis for this specific file transfer
 	TrackingUUID         string
 	FileTransferResponse chan (json.RawMessage)
 }
-type GetFileFromMythicStruct struct {
+type GetFileFromChrysalisStruct struct {
 	// the following are set by the calling Task
 	Task                  *Task
 	FullPath              string
 	FileID                string
 	SendUserStatusUpdates bool
-	// set by the calling Task to receive data from Mythic one chunk at a time
+	// set by the calling Task to receive data from Chrysalis one chunk at a time
 	ReceivedChunkChannel chan ([]byte)
 	// the following are set and used by Poseidon, Task doesn't use
 	TrackingUUID         string
@@ -219,8 +218,8 @@ type FileData struct {
 type DelegateMessage struct {
 	Message       string `json:"message"`
 	UUID          string `json:"uuid"`
-	C2ProfileName string `json:"c2_profile"`
-	MythicUUID    string `json:"new_uuid,omitempty"`
+	ProfileName   string `json:"c2_profile"`
+	ChrysalisUUID string `json:"new_uuid,omitempty"`
 }
 
 type FileUploadMessage struct {
@@ -247,10 +246,10 @@ type FileUploadMessageResponse struct {
 	FileID      string `json:"file_id"`
 }
 type P2PConnectionMessage struct {
-	Source        string `json:"source"`
-	Destination   string `json:"destination"`
-	Action        string `json:"action"`
-	C2ProfileName string `json:"c2_profile"`
+	Source      string `json:"source"`
+	Destination string `json:"destination"`
+	Action      string `json:"action"`
+	ProfileName string `json:"c2_profile"`
 }
 
 // TaskStub to post list of currently processing tasks.
@@ -274,7 +273,7 @@ type SocksMsg struct {
 	Exit     bool   `json:"exit"`
 }
 
-// Message - struct definition for external C2 messages
+// Message - struct definition for external Comm messages
 type Message struct {
 	Tag    string `json:"tag"`
 	Client bool   `json:"client"`

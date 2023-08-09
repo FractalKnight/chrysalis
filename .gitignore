@@ -15,9 +15,9 @@ venv.bak/
 .idea/
 # ssl certs
 ssl/
-# Mythic files
+# Chrysalis files
 files/
-mythic_access.*
+chrysalis_access.*
 postgres-docker/database/
 rabbitmq-docker/storage/
 display_output.txt

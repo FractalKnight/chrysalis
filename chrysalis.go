@@ -2,7 +2,6 @@ package main
 
 import (
 	"C"
-
 	// Standard
 	"encoding/json"
 	"fmt"
@@ -440,6 +439,26 @@ func handleRemoveInternalTCPConnections() {
 
 func main() {
 	// Initialize the  agent and check in
+	/* cntxt := &daemon.Context{
+		PidFileName: "chrysalis.pid",
+		PidFilePerm: 0644,
+		LogFileName: "larvae.log",
+		LogFilePerm: 0640,
+		WorkDir:     "./",
+		Umask:       027,
+		Args:        []string{},
+	}
+		d, err := cntxt.Reborn()
+		if err != nil {
+			log.Fatal("Unable to run: ", err)
+		}
+		if d != nil {
+			return
+		}
+		defer cntxt.Release()
+
+	log.Print("- - - - - - - - - - - - - - -")
+	log.Print("daemon started") */
 	go aggregateResponses()
 	go aggregateDelegateMessagesToChrysalis()
 	go aggregateEdgeAnnouncementsToChrysalis()

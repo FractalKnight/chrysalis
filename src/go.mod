@@ -23,17 +23,17 @@ require (
 )
 
 replace (
-	github.com/FractalKnight/chrysalis/chrysalis/bash_executor => ./bash_executor
-	github.com/FractalKnight/chrysalis/chrysalis/cmd_executor => ./cmd_executor
-	github.com/FractalKnight/chrysalis/chrysalis/download => ./download
-	github.com/FractalKnight/chrysalis/chrysalis/link_tcp => ./link_tcp
-	github.com/FractalKnight/chrysalis/chrysalis/pkg/profiles => ./pkg/profiles
-	github.com/FractalKnight/chrysalis/chrysalis/pkg/utils/structs => ./pkg/utils/structs
-	github.com/FractalKnight/chrysalis/chrysalis/powershell_executor => ./powershell_executor
-	github.com/FractalKnight/chrysalis/chrysalis/sh_executor => ./sh_executor
-	github.com/FractalKnight/chrysalis/chrysalis/sleep => ./sleep
-	github.com/FractalKnight/chrysalis/chrysalis/socks => ./socks
-	github.com/FractalKnight/chrysalis/chrysalis/unlink_tcp => ./unlink_tcp
-	github.com/FractalKnight/chrysalis/chrysalis/upload => ./upload
-	github.com/FractalKnight/chrysalis/chrysalis/zsh_executor => ./zsh_executor
+	github.com/FractalKnight/chrysalis/src/bash_executor => ./bash_executor
+	github.com/FractalKnight/chrysalis/src/cmd_executor => ./cmd_executor
+	github.com/FractalKnight/chrysalis/src/download => ./download
+	github.com/FractalKnight/chrysalis/src/link_tcp => ./link_tcp
+	github.com/FractalKnight/chrysalis/src/pkg/profiles => ./pkg/profiles
+	github.com/FractalKnight/chrysalis/src/pkg/utils/structs => ./pkg/utils/structs
+	github.com/FractalKnight/chrysalis/src/powershell_executor => ./powershell_executor
+	github.com/FractalKnight/chrysalis/src/sh_executor => ./sh_executor
+	github.com/FractalKnight/chrysalis/src/sleep => ./sleep
+	github.com/FractalKnight/chrysalis/src/socks => ./socks
+	github.com/FractalKnight/chrysalis/src/unlink_tcp => ./unlink_tcp
+	github.com/FractalKnight/chrysalis/src/upload => ./upload
+	github.com/FractalKnight/chrysalis/src/zsh_executor => ./zsh_executor
 )

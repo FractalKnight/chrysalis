@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	//     chrysalis
+	//     src
 
 	"github.com/FractalKnight/chrysalis/pkg/utils/functions"
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
@@ -261,7 +261,7 @@ func SendFile(sendFileToChrysalis structs.SendFileToChrysalisStruct) {
 		size = int64(len(*sendFileToChrysalis.Data))
 	}
 
-	const FILE_CHUNK_SIZE = 512000 //Normal chrysalis chunk size
+	const FILE_CHUNK_SIZE = 512000 //Normal src chunk size
 	chunks := uint64(math.Ceil(float64(size) / FILE_CHUNK_SIZE))
 	fileDownloadData := structs.FileDownloadMessage{}
 	fileDownloadData.TotalChunks = int(chunks)
@@ -418,7 +418,7 @@ func GetFile(getFileFromChrysalis structs.GetFileFromChrysalisStruct) {
 
 	getFileFromChrysalis.Task.Job.SendResponses <- fileUploadMsg
 	rawData := <-getFileFromChrysalis.FileTransferResponse
-	fileUploadMsgResponse := structs.FileUploadMessageResponse{} // Unmarshal the file upload response from chrysalis
+	fileUploadMsgResponse := structs.FileUploadMessageResponse{} // Unmarshal the file upload response from src
 	err := json.Unmarshal(rawData, &fileUploadMsgResponse)
 	if err != nil {
 		errResponse := structs.Response{}

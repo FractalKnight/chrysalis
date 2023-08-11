@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	//     chrysalis
+	//     src
 
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
 )

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	//     chrysalis
+	//     src
 	"github.com/FractalKnight/chrysalis/pkg/profiles"
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
 )
@@ -146,7 +146,7 @@ func readFromChrysalis(fromChrysalisSocksChannel chan structs.SocksMsg, toChrysa
 		select {
 		case curMsg := <-fromChrysalisSocksChannel:
 			//now we have a message, process it
-			//fmt.Println("about to lock in chrysalis read")
+			//fmt.Println("about to lock in src read")
 			data, err := base64.StdEncoding.DecodeString(curMsg.Data)
 			if err != nil {
 				//fmt.Printf("Failed to decode message")
@@ -156,13 +156,13 @@ func readFromChrysalis(fromChrysalisSocksChannel chan structs.SocksMsg, toChrysa
 			//channelMap.RLock()
 			thisChan, ok := channelMap.m[curMsg.ServerId]
 
-			//fmt.Println("just unlocked in chrysalis read")
+			//fmt.Println("just unlocked in src read")
 			if !ok {
 				//channelMap.RUnlock()
 				// we don't have this connection registered, spin off new channel
 				if curMsg.Exit {
-					//fmt.Printf("don't have channel %d, but chrysalis said exit, just continue loop\n", curMsg.ServerId)
-					//we don't have an open connection and chrysalis is telling us to close it, just break and continue
+					//fmt.Printf("don't have channel %d, but src said exit, just continue loop\n", curMsg.ServerId)
+					//we don't have an open connection and src is telling us to close it, just break and continue
 					continue
 				}
 				//fmt.Printf("about to add to mutex map\n")
@@ -198,7 +198,7 @@ func connectToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, channelId i
 		msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 		msg.Exit = true
 		toChrysalisSocksChannel <- msg
-		//fmt.Printf("Telling chrysalis locally to exit channel in connectToProxy %d, exit going back to chrysalis too\n", channelId)
+		//fmt.Printf("Telling src locally to exit channel in connectToProxy %d, exit going back to src too\n", channelId)
 		fromChrysalisSocksChannel <- msg
 		//go removeMutexMap(channelMap, channelId, nil)
 		return
@@ -211,7 +211,7 @@ func connectToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, channelId i
 		msg.Data = ""
 		msg.Exit = true
 		toChrysalisSocksChannel <- msg
-		//fmt.Printf("Telling chrysalis locally to exit channel %d from bad headers, exit going back to chrysalis too\n", channelId)
+		//fmt.Printf("Telling src locally to exit channel %d from bad headers, exit going back to src too\n", channelId)
 		fromChrysalisSocksChannel <- msg
 		//go removeMutexMap(channelMap, channelId, nil)
 		return
@@ -227,7 +227,7 @@ func connectToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, channelId i
 		msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 		msg.Exit = true
 		toChrysalisSocksChannel <- msg
-		//fmt.Printf("Telling chrysalis locally to exit channel %d from bad address, exit going back to chrysalis too\n", channelId)
+		//fmt.Printf("Telling src locally to exit channel %d from bad address, exit going back to src too\n", channelId)
 		fromChrysalisSocksChannel <- msg
 		//go removeMutexMap(channelMap, channelId, nil)
 		return
@@ -255,7 +255,7 @@ func connectToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, channelId i
 			msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 			msg.Exit = true
 			toChrysalisSocksChannel <- msg
-			//fmt.Printf("Telling chrysalis locally to exit channel %d from unresolved fqdn, exit going back to chrysalis too\n", channelId)
+			//fmt.Printf("Telling src locally to exit channel %d from unresolved fqdn, exit going back to src too\n", channelId)
 			fromChrysalisSocksChannel <- msg
 			//fmt.Printf("Failed to resolve destination '%v': %v\n", dest.FQDN, err)
 			//go removeMutexMap(channelMap, channelId, nil)
@@ -284,7 +284,7 @@ func connectToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, channelId i
 			msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 			msg.Exit = true
 			toChrysalisSocksChannel <- msg
-			//fmt.Printf("Telling chrysalis locally to exit channel %d from bad command, exit going back to chrysalis too\n", channelId)
+			//fmt.Printf("Telling src locally to exit channel %d from bad command, exit going back to src too\n", channelId)
 			fromChrysalisSocksChannel <- msg
 			//fmt.Printf("Connect to %v failed: %v, %v\n", request.DestAddr, errorMsg, data)
 			//go removeMutexMap(channelMap, channelId, nil)
@@ -311,7 +311,7 @@ func connectToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, channelId i
 		msg.Data = base64.StdEncoding.EncodeToString(bytesToSend)
 		msg.Exit = true
 		toChrysalisSocksChannel <- msg
-		//fmt.Printf("Telling chrysalis locally to exit channel %d from default command case, exit going back to chrysalis too\n", channelId)
+		//fmt.Printf("Telling src locally to exit channel %d from default command case, exit going back to src too\n", channelId)
 		fromChrysalisSocksChannel <- msg
 		//fmt.Printf("Unsupported command: %v, %v\n", request.Command, channelId)
 		//go removeMutexMap(channelMap, channelId, nil)
@@ -336,7 +336,7 @@ func readFromProxy(fromChrysalisSocksChannel chan structs.SocksMsg, conn net.Con
 			msg.Data = "" //base64 of -1
 			msg.Exit = true
 			toChrysalisSocksChannel <- msg
-			//fmt.Printf("Telling chrysalis locally to exit channel %d from bad proxy read, exit going back to chrysalis too\n", channelId)
+			//fmt.Printf("Telling src locally to exit channel %d from bad proxy read, exit going back to src too\n", channelId)
 			fromChrysalisSocksChannel <- msg
 			conn.Close()
 			//fmt.Printf("closing from bad proxy read: %v, %v\n", err.Error(), channelId)
@@ -357,7 +357,7 @@ func readFromProxy(fromChrysalisSocksChannel chan structs.SocksMsg, conn net.Con
 	msg.ServerId = channelId
 	msg.Data = ""
 	msg.Exit = true
-	//fmt.Printf("Telling chrysalis locally to exit channel %d reading go routine exiting, exit going back to chrysalis too\n", channelId)
+	//fmt.Printf("Telling src locally to exit channel %d reading go routine exiting, exit going back to src too\n", channelId)
 	fromChrysalisSocksChannel <- msg
 	conn.Close()
 	//go removeMutexMap(channelMap, channelId, conn)
@@ -371,10 +371,10 @@ func writeToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, conn net.Conn
 		// Send a response back to person contacting us.
 		//fmt.Printf("writeToProxy wants to send %d bytes\n", len(bufOut.Data))
 		if bufOut.Exit {
-			// got a message from chrysalis that says to exit
+			// got a message from src that says to exit
 			//fmt.Printf("channel (%d) got exit message from Chrysalis\n", channelId)
 			w.Flush()
-			//fmt.Printf("Telling chrysalis locally to exit channel %d, exit going back to chrysalis too\n", channelId)
+			//fmt.Printf("Telling src locally to exit channel %d, exit going back to src too\n", channelId)
 			//fromChrysalisSocksChannel <- bufOut
 			conn.Close()
 			//go removeMutexMap(channelMap, channelId, conn)
@@ -388,7 +388,7 @@ func writeToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, conn net.Conn
 			msg.ServerId = channelId
 			msg.Data = ""
 			msg.Exit = true
-			//fmt.Printf("Telling chrysalis locally to exit channel %d, bad base64 data, exit going back to chrysalis too\n", channelId)
+			//fmt.Printf("Telling src locally to exit channel %d, bad base64 data, exit going back to src too\n", channelId)
 			fromChrysalisSocksChannel <- msg
 			conn.Close()
 			//go removeMutexMap(channelMap, channelId, conn)
@@ -402,7 +402,7 @@ func writeToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, conn net.Conn
 			msg.Data = ""
 			msg.Exit = true
 			toChrysalisSocksChannel <- msg
-			//fmt.Printf("Telling chrysalis locally to exit channel %d bad write to proxy, exit going back to chrysalis too\n", channelId)
+			//fmt.Printf("Telling src locally to exit channel %d bad write to proxy, exit going back to src too\n", channelId)
 			fromChrysalisSocksChannel <- msg
 			conn.Close()
 			//fmt.Printf("channel (%d) closing from bad proxy write\n", channelId)
@@ -418,7 +418,7 @@ func writeToProxy(fromChrysalisSocksChannel chan structs.SocksMsg, conn net.Conn
 	msg.ServerId = channelId
 	msg.Data = ""
 	msg.Exit = true
-	//fmt.Printf("Telling chrysalis locally to exit channel %d proxy writing go routine exiting, exit going back to chrysalis too\n", channelId)
+	//fmt.Printf("Telling src locally to exit channel %d proxy writing go routine exiting, exit going back to src too\n", channelId)
 	fromChrysalisSocksChannel <- msg
 	conn.Close()
 	//go removeMutexMap(channelMap, channelId, conn)

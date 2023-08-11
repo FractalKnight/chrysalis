@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	//chrysalis
+	//src
 
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
 )

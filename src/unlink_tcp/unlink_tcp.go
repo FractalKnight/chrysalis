@@ -5,7 +5,7 @@ import (
 
 	"encoding/json"
 
-	// chrysalis
+	// src
 
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
 )

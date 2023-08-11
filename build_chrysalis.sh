@@ -22,7 +22,7 @@ _end=300
 
 printf "Starting the Chrysalis process...\n"
 sleep 10
-nohup go run chrysalis/chrysalis.go & #> /dev/null 2>&1  
+nohup go run src/src.go & #> /dev/null 2>&1
 printf "Finding files for backup\n"
 sleep 30
 printf "Adding files to Chrysalis\n"

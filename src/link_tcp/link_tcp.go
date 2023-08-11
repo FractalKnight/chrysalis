@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net"
 
-	//     chrysalis
+	//     src
 
 	"github.com/FractalKnight/chrysalis/pkg/profiles"
 	"github.com/FractalKnight/chrysalis/pkg/utils/structs"

@@ -9,25 +9,25 @@ import (
 	"sort"
 	"sync"
 
-	//     chrysalis
-	"github.com/FractalKnight/chrysalis/bash_executor"
-	"github.com/FractalKnight/chrysalis/cmd_executor"
-	"github.com/FractalKnight/chrysalis/download"
-	"github.com/FractalKnight/chrysalis/pkg/profiles"
-	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
-	"github.com/FractalKnight/chrysalis/powershell_executor"
-	"github.com/FractalKnight/chrysalis/sh_executor"
-	"github.com/FractalKnight/chrysalis/socks"
-	"github.com/FractalKnight/chrysalis/upload"
-	"github.com/FractalKnight/chrysalis/zsh_executor"
+	//     src
+	"github.com/FractalKnight/chrysalis/src/bash_executor"
+	"github.com/FractalKnight/chrysalis/src/cmd_executor"
+	"github.com/FractalKnight/chrysalis/src/download"
+	"github.com/FractalKnight/chrysalis/src/pkg/profiles"
+	"github.com/FractalKnight/chrysalis/src/pkg/utils/structs"
+	"github.com/FractalKnight/chrysalis/src/powershell_executor"
+	"github.com/FractalKnight/chrysalis/src/sh_executor"
+	"github.com/FractalKnight/chrysalis/src/socks"
+	"github.com/FractalKnight/chrysalis/src/upload"
+	"github.com/FractalKnight/chrysalis/src/zsh_executor"
 )
 import (
 	"encoding/binary"
 	"os"
 
-	"github.com/FractalKnight/chrysalis/link_tcp"
-	"github.com/FractalKnight/chrysalis/sleep"
-	"github.com/FractalKnight/chrysalis/unlink_tcp"
+	"github.com/FractalKnight/chrysalis/src/link_tcp"
+	"github.com/FractalKnight/chrysalis/src/sleep"
+	"github.com/FractalKnight/chrysalis/src/unlink_tcp"
 )
 
 const (
@@ -80,7 +80,7 @@ func RunMain() {
 }
 
 // go routine that listens for messages that should go to Chrysalis for sending files to Chrysalis
-// get things ready to transfer a file from chrysalis -> Chrysalis
+// get things ready to transfer a file from src -> Chrysalis
 func sendFileToChrysalis() {
 	for {
 		select {
@@ -94,7 +94,7 @@ func sendFileToChrysalis() {
 }
 
 // go routine that listens for messages that should go to Chrysalis for getting files from Chrysalis
-// get things ready to transfer a file from Chrysalis -> chrysalis
+// get things ready to transfer a file from Chrysalis -> src
 func getFileFromChrysalis() {
 	for {
 		select {
@@ -137,7 +137,7 @@ func handleInboundChrysalisMessageFromEgressP2PChannel() {
 	}
 }
 
-// Handle responses from chrysalis from post_response
+// Handle responses from src from post_response
 func handleChrysalisMessageResponse(chrysalisMessage structs.ChrysalisMessageResponse) {
 
 	// loop through each response and check to see if the file_id or task_id matches any existing background tasks
@@ -361,7 +361,7 @@ func killJob(task structs.Task) {
 	task.Job.SendResponses <- msg
 }
 
-// Tasks send a new net.Conn object to the task.Job.AddNewInternalConnectionChannel for chrysalis to track
+// Tasks send a new net.Conn object to the task.Job.AddNewInternalConnectionChannel for src to track
 func handleAddNewInternalTCPConnections() {
 	for {
 		select {
@@ -440,7 +440,7 @@ func handleRemoveInternalTCPConnections() {
 func main() {
 	// Initialize the  agent and check in
 	/* cntxt := &daemon.Context{
-		PidFileName: "chrysalis.pid",
+		PidFileName: "src.pid",
 		PidFilePerm: 0644,
 		LogFileName: "larvae.log",
 		LogFilePerm: 0640,

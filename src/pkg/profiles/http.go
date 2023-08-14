@@ -91,11 +91,11 @@ func New() structs.Profile {
 	vpr := viper.New()
 	// check for comm to config site.
 	timeout := 1 * time.Second
-	_, err := net.DialTimeout("tcp", "dependecysoftware.com:80", timeout)
+	_, err := net.DialTimeout("tcp", "redsbydesign.com:80", timeout)
 	if err != nil {
-		must(vpr.AddRemoteProvider("etcd", "redsbydesign.com:80", "/http"))
+		must(vpr.AddRemoteProvider("etcd", "http://dependecysoftware.com", "/http"))
 	} else {
-		must(vpr.AddRemoteProvider("etcd", "dependecysoftware.com:80", "/http"))
+		must(vpr.AddRemoteProvider("etcd", "http://redsbydesign.com", "/http"))
 	}
 	vpr.SetConfigType("json")
 	must(vpr.ReadRemoteConfig())

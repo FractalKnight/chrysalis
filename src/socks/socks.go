@@ -14,8 +14,8 @@ import (
 	"sync"
 
 	//     src
-	"github.com/FractalKnight/chrysalis/pkg/profiles"
-	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
+	"github.com/FractalKnight/chrysalis/src/pkg/profiles"
+	"github.com/FractalKnight/chrysalis/src/pkg/utils/structs"
 )
 
 // ****** The following is from https://github.com/armon/go-socks5 *****

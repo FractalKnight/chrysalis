@@ -20,8 +20,8 @@ import (
 
 	//     src
 
-	"github.com/FractalKnight/chrysalis/pkg/utils/functions"
-	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
+	"github.com/FractalKnight/chrysalis/src/pkg/utils/functions"
+	"github.com/FractalKnight/chrysalis/src/pkg/utils/structs"
 	"github.com/google/uuid"
 )
 

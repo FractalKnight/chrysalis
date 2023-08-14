@@ -9,8 +9,8 @@ import (
 
 	//     src
 
-	"github.com/FractalKnight/chrysalis/pkg/profiles"
-	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
+	"github.com/FractalKnight/chrysalis/src/pkg/profiles"
+	"github.com/FractalKnight/chrysalis/src/pkg/utils/structs"
 )
 
 type Arguments struct {

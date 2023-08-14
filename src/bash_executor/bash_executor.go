@@ -9,7 +9,7 @@ import (
 
 	// src
 
-	"github.com/FractalKnight/chrysalis/pkg/utils/structs"
+	"github.com/FractalKnight/chrysalis/src/pkg/utils/structs"
 )
 
 // Run - Function that executes the bash_executor command

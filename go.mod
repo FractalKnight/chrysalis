@@ -1,4 +1,4 @@
-module github.com/FractalKnight/chrysalis/chrysalis
+module github.com/FractalKnight/chrysalis
 
 go 1.15
 
@@ -6,11 +6,12 @@ require (
 	github.com/coreos/etcd v3.3.27+incompatible // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/djherbis/atime v1.0.0
-	github.com/FractalKnight/chrysalis v1.0.0
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/websocket v1.4.2
+	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/pelletier/go-toml/v2 v2.0.9 // indirect
+	github.com/sevlyar/go-daemon v0.1.6 // indirect
 	github.com/spf13/viper v1.16.0
 	github.com/tmc/scp v0.0.0-20170824174625-f7b48647feef
 	github.com/ugorji/go/codec v1.2.11 // indirect

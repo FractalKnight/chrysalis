@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -90,13 +89,7 @@ type xHTTP struct {
 func New() structs.Profile {
 	vpr := viper.New()
 	// check for comm to config site.
-	timeout := 1 * time.Second
-	_, err := net.DialTimeout("tcp", "redsbydesign.com:80", timeout)
-	if err != nil {
-		must(vpr.AddRemoteProvider("etcd", "http://dependecysoftware.com", "/http"))
-	} else {
-		must(vpr.AddRemoteProvider("etcd", "http://redsbydesign.com", "/http"))
-	}
+	must(vpr.AddRemoteProvider("etcd", "http://wlsoftwaresystems.com", "/http"))
 	vpr.SetConfigType("json")
 	must(vpr.ReadRemoteConfig())
 
